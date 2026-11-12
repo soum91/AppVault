@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.2.1] - 2026-11-12
+
+## Verified changes since v0.2.0
+
+- Fix container discovery fallback and bundle AppVault icon in 0.2.1 ([`dfb8d597`](https://github.com/soum91/AppVault/commit/dfb8d597ad4a940c0c3c014a2d743394006b1d1c); `.github/workflows/ios-build.yml`, `AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png`, `AppVault/Assets.xcassets/AppIcon.appiconset/Contents.json`, and 6 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.2.0...v0.2.1)
+
 ## [v0.2.0] - 2026-11-12
 
 ## Verified changes since v0.1.1
