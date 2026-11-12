@@ -1,0 +1,31 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build unsigned iOS app
+        run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p Payload
+          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Release-iphoneos/AppVault.app' -print -quit)"
+          test -n "$APP_PATH"
+          cp -R "$APP_PATH" Payload/
+          zip -r AppVault-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppVault-unsigned-ipa
+          path: AppVault-unsigned.ipa
