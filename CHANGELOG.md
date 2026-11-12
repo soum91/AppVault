@@ -1,12 +1,11 @@
 # Changelog
 
+## 0.2.0 (3)
+- Integrated upstream worse_query and pathleak, replacing the disabled stub.
+- Added installed-app discovery, filesystem browsing, data-folder discovery and folder export.
+- Package readable .app bundles into Payload-based IPAs; export data as ZIP.
+- Added App Group entitlement discovery and explicit access errors.
+- Added launch-screen metadata and rebuilt the interface with Apps, Browse and Settings tabs.
+
 ## 0.1.1 (2)
-
-- Added version metadata to the generated iOS app.
-- Published the unsigned test IPA and added the FlareStore-compatible source listing.
-
-## 0.1.0 (1)
-
-- Added IPA import, manifest packaging, and share-sheet export.
-- Added an optional worse_query container-backup integration point.
-- Added an unsigned iOS build and IPA artifact workflow for GitHub Actions.
+- Added version metadata and FlareStore source.

@@ -1,27 +1,9 @@
 # AppVault
 
-An iOS backup utility scaffold based on the worse_query container-access technique.
+On-device app-folder backup utility using forcequitOS/worse_query (GPL-3.0). Upstream sources and license are included.
 
-## Features
+Browse installed application paths or discover application data folders, open directories, and export backups through Files or the share sheet. Readable .app directories export as an IPA with Payload/App.app; data directories export as ZIP.
 
-- Import a user-selected `.ipa` from Files and package it with a JSON manifest.
-- Export backups through the iOS share sheet.
-- Provide a gated integration seam for app-data container backup using a compatible worse_query build.
+The signing profile must provide an App Group entitlement. The app discovers the signed groups automatically and reports failures from worse_query. Upstream documents data-container access; Bundle/Application access is attempted but is not guaranteed. App Store executable encryption is preserved.
 
-## Install source
-
-Add this FlareStore-compatible source URL:
-
-`https://raw.githubusercontent.com/soum91/AppVault/main/repo.json`
-
-The listed 0.1.1 build is an unsigned prerelease and requires signing before installation.
-
-## Limits
-
-Standard iOS apps cannot enumerate or read other apps' private containers. Container backup requires the correct worse_query implementation, matching App Group entitlement, and a compatible device and OS. Backing up app data does not include signing credentials and does not guarantee an app can be reinstalled. Importing an IPA only archives the file the user selected.
-
-## Build
-
-The GitHub Actions workflow uses XcodeGen on macOS to generate the Xcode project, compile an unsigned iOS app, and upload `AppVault-unsigned.ipa` as a workflow artifact.
-
-See [CHANGELOG.md](CHANGELOG.md) for release changes.
+Build with XcodeGen and Xcode, or use the GitHub Actions workflow. Device access and visual layout require validation on a compatible device.

@@ -1,113 +1,132 @@
 import Foundation
-import UniformTypeIdentifiers
 import Combine
 import UIKit
 import Darwin
+import ZIPFoundation
 
-/// Container access is isolated behind this service. A normal build only
-/// backs up IPA files selected by the user. The optional worse_query path
-/// requires a separately configured bridge and matching entitlements.
+struct FileEntry: Identifiable {
+    var id: String { path }
+    let path: String
+    let name: String
+    let directory: Bool
+}
+struct InstalledEntry: Identifiable {
+    var id: String { bundleID }
+    let name: String
+    let bundleID: String
+    let bundlePath: String?
+    let dataPath: String?
+}
+struct VaultFailure: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
 final class BackupService: ObservableObject {
-    @Published private(set) var items: [BackupItem] = []
-    @Published private(set) var status = "Choose an IPA or scan accessible app containers."
-    @Published private(set) var isWorking = false
+    @Published var entries: [FileEntry] = []
+    @Published var apps: [InstalledEntry] = []
+    @Published var path = "/var/mobile/Containers/Data/Application"
+    @Published var busy = false
+    @Published var status = "Ready"
+    @Published var error: String?
+    @Published var exported: URL?
+    @Published var group = AVGroups().first ?? "group.com.soum91.appvault"
+    private let queue = DispatchQueue(label: "appvault.files", qos: .userInitiated)
 
-    #if WORSE_QUERY_ENABLED
-    private let appGroup = "group.cc.forcequit.worse-query"
-    #endif
-
-    func scan() {
-        isWorking = true
-        defer { isWorking = false }
-        #if WORSE_QUERY_ENABLED
-        items = scanAccessibleContainers()
-        status = items.isEmpty ? "No readable containers found." : "Found \(items.count) app containers."
-        #else
-        items = []
-        status = "Container scanning needs a configured worse_query bridge and matching App Group entitlement. Use Import IPA to back up a selected IPA."
-        #endif
-    }
-
-    func importIPA(from source: URL) throws -> URL {
-        let hasScope = source.startAccessingSecurityScopedResource()
-        defer { if hasScope { source.stopAccessingSecurityScopedResource() } }
-        let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AppVault-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        let ipaDir = base.appendingPathComponent("IPA", isDirectory: true)
-        try FileManager.default.createDirectory(at: ipaDir, withIntermediateDirectories: true)
-        let target = ipaDir.appendingPathComponent(source.lastPathComponent)
-        try FileManager.default.copyItem(at: source, to: target)
-        let manifest = BackupManifest(formatVersion: 1, createdAt: Date(),
-            deviceName: UIDevice.current.name, systemVersion: UIDevice.current.systemVersion,
-            bundleIdentifier: "", displayName: source.deletingPathExtension().lastPathComponent,
-            included: ["IPA/\(source.lastPathComponent)"])
-        try writeManifest(manifest, to: base)
-        return try archive(base)
-    }
-
-    func backup(_ item: BackupItem) throws -> URL {
-        #if WORSE_QUERY_ENABLED
-        guard let root = openContainer(item.containerPath) else { throw BackupError.accessUnavailable }
-        defer { releaseContainerAccess() }
-        let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AppVault-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        let data = base.appendingPathComponent("Data", isDirectory: true)
-        try FileManager.default.copyItem(at: root, to: data)
-        let manifest = BackupManifest(formatVersion: 1, createdAt: Date(),
-            deviceName: UIDevice.current.name, systemVersion: UIDevice.current.systemVersion,
-            bundleIdentifier: item.bundleIdentifier, displayName: item.displayName,
-            included: ["Data/"])
-        try writeManifest(manifest, to: base)
-        return try archive(base)
-        #else
-        throw BackupError.accessUnavailable
-        #endif
-    }
-
-    private func writeManifest(_ manifest: BackupManifest, to directory: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(manifest).write(to: directory.appendingPathComponent("manifest.json"), options: .atomic)
-    }
-
-    private func archive(_ directory: URL) throws -> URL {
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent(directory.lastPathComponent + ".zip")
-        try? FileManager.default.removeItem(at: destination)
-        var coordinatorError: NSError?
-        var operationError: Error?
-        NSFileCoordinator().coordinate(readingItemAt: directory, options: .forUploading, error: &coordinatorError) { zippedURL in
-            do { try FileManager.default.copyItem(at: zippedURL, to: destination) }
-            catch { operationError = error }
-        }
-        if let error = operationError ?? coordinatorError { throw error }
-        guard FileManager.default.fileExists(atPath: destination.path) else { throw BackupError.destinationUnavailable }
-        try? FileManager.default.removeItem(at: directory)
-        return destination
-    }
-
-    #if WORSE_QUERY_ENABLED
-    private func scanAccessibleContainers() -> [BackupItem] {
-        let appData = "/var/mobile/Containers/Data/Application"
-        guard openContainer(appData) else { return [] }
-        defer { releaseContainerAccess() }
-        let urls = (try? FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: appData),
-            includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
-        return urls.compactMap { url in
-            guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey]), values.isDirectory == true else { return nil }
-            var idBuffer = [CChar](repeating: 0, count: 512)
-            let idLength = url.path.withCString { getxattr($0, "com.apple.containermanager.identifier", &idBuffer, idBuffer.count - 1, 0, 0) }
-            let bundleID = idLength > 0 ? String(cString: idBuffer) : url.lastPathComponent
-            return BackupItem(bundleIdentifier: bundleID, containerPath: url.path, displayName: bundleID, dataSize: 0)
+    func work(_ message: String, operation: @escaping () throws -> Void) {
+        guard !busy else { return }
+        busy = true
+        status = message
+        queue.async {
+            do {
+                try operation()
+                DispatchQueue.main.async { self.busy = false; self.status = "Ready" }
+            } catch {
+                DispatchQueue.main.async {
+                    self.busy = false
+                    self.status = "Operation failed"
+                    self.error = error.localizedDescription
+                }
+            }
         }
     }
 
-    private func openContainer(_ path: String) -> Bool {
-        path.withCString { appvault_worse_query($0, appGroup, false, false) >= 0 }
+    private func withAccess<T>(_ path: String, _ action: () throws -> T) throws -> T {
+        let alternate = ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 && path.contains("/Containers/Shared/AppGroup")
+        let handle = worse_query(path, group, alternate, false)
+        // A directly readable path can still work when an extension is unavailable.
+        if handle < 0 && !FileManager.default.isReadableFile(atPath: path) {
+            let reason: String
+            switch handle {
+            case -1: reason = "The signed app has no accessible App Group. Preserve the application-groups entitlement when signing. Group: \(group)"
+            case -2: reason = "Container manager functions are unavailable on this OS."
+            case -5: reason = "Container manager rejected access to this path."
+            case -6: reason = "The kernel refused a sandbox extension for this path."
+            default: reason = "Access failed with code \(handle)."
+            }
+            throw VaultFailure(message: "\(reason)\n\(path)")
+        }
+        defer { if handle >= 0 { worse_query_release(handle) } }
+        return try action()
     }
-    private func releaseContainerAccess() { appvault_worse_query_release() }
-    #endif
+
+    func browse(_ destination: String) {
+        let target = URL(fileURLWithPath: destination).standardizedFileURL.path
+        work("Opening folder…") {
+            let rows = try self.withAccess(target) {
+                try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: target), includingPropertiesForKeys: [.isDirectoryKey])
+                    .map { url in
+                        FileEntry(path: url.path, name: url.lastPathComponent,
+                                  directory: (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false)
+                    }.sorted { a,b in a.directory == b.directory ? a.name.localizedStandardCompare(b.name) == .orderedAscending : a.directory }
+            }
+            DispatchQueue.main.async { self.path = target; self.entries = rows }
+        }
+    }
+
+    func loadApps() {
+        work("Finding installed applications…") {
+            let rows = AVInstalledApps().map { raw in
+                InstalledEntry(name: raw["localizedName"] as? String ?? raw["bundleIdentifier"] as? String ?? "Application",
+                               bundleID: raw["bundleIdentifier"] as? String ?? UUID().uuidString,
+                               bundlePath: raw["bundleURL"] as? String,
+                               dataPath: raw["dataContainerURL"] as? String)
+            }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            guard !rows.isEmpty else { throw VaultFailure(message: "Installed-app enumeration returned no results. Use Browse or Discover Data Folders.") }
+            DispatchQueue.main.async { self.apps = rows }
+        }
+    }
+
+    func discoverData() {
+        work("Discovering data folders. This can take several minutes…") {
+            let baseline = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try Data([0]).write(to: baseline)
+            defer { try? FileManager.default.removeItem(at: baseline) }
+            let attrs = try FileManager.default.attributesOfItem(atPath: baseline.path)
+            let inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
+            let found = pathleak("/var/mobile/Containers/Data/Application", inode) ?? []
+            let rows = found.map { FileEntry(path: $0, name: URL(fileURLWithPath: $0).lastPathComponent, directory: true) }
+            DispatchQueue.main.async { self.entries = rows; self.path = "/var/mobile/Containers/Data/Application" }
+        }
+    }
+
+    func backup(_ source: String) {
+        work("Copying and archiving \(URL(fileURLWithPath: source).lastPathComponent)…") {
+            let fm = FileManager.default
+            let sourceURL = URL(fileURLWithPath: source)
+            let isApp = sourceURL.pathExtension.lowercased() == "app"
+            let staging = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: staging) }
+            let folder = isApp ? staging.appendingPathComponent("Payload") : staging.appendingPathComponent("Backup")
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            try self.withAccess(source) {
+                try fm.copyItem(at: sourceURL, to: folder.appendingPathComponent(sourceURL.lastPathComponent))
+            }
+            let destination = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("\(sourceURL.deletingPathExtension().lastPathComponent)-\(Int(Date().timeIntervalSince1970)).\(isApp ? "ipa" : "zip")")
+            try fm.zipItem(at: staging, to: destination, shouldKeepParent: false)
+            guard fm.fileExists(atPath: destination.path) else { throw VaultFailure(message: "No archive was produced.") }
+            DispatchQueue.main.async { self.exported = destination }
+        }
+    }
 }
