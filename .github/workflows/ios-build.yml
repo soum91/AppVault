@@ -1,31 +1,62 @@
 name: iOS Build
-
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-
+permissions:
+  contents: write
+concurrency:
+  group: appvault-build
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate Xcode project
-        run: xcodegen generate
-      - name: Build unsigned iOS app
-        run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
-      - name: Package unsigned IPA
+      - name: Install build tools
+        run: brew install xcodegen ldid
+      - run: xcodegen generate
+      - name: Build device app
+        run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Package IPA with entitlement template
         run: |
           mkdir -p Payload
-          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/Build/Products/Release-iphoneos/AppVault.app' -print -quit)"
-          test -n "$APP_PATH"
-          cp -R "$APP_PATH" Payload/
-          zip -r AppVault-unsigned.ipa Payload
+          cp -R build/Build/Products/Release-iphoneos/AppVault.app Payload/
+          ldid -SAppVault/AppVault.entitlements Payload/AppVault.app/AppVault
+          cp AppVault/AppVault.entitlements Payload/AppVault.app/archived-expanded-entitlements.xcent
+          zip -qry AppVault-0.2.0.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-unsigned-ipa
-          path: AppVault-unsigned.ipa
+          name: AppVault-0.2.0-ipa
+          path: AppVault-0.2.0.ipa
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view v0.2.0 >/dev/null 2>&1; then
+            gh release create v0.2.0 AppVault-0.2.0.ipa --target "$GITHUB_SHA" --title "AppVault 0.2.0 (3)" --prerelease --notes "Integrated worse_query and pathleak, application discovery, folder browsing and backup export. Includes App Group entitlement template. Signing must retain a provisioned App Group. Bundle-directory access and device behavior remain unverified."
+          fi
+      - name: Refresh FlareStore source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,base64,subprocess,os
+          from datetime import datetime,timezone
+          repo=os.environ['GITHUB_REPOSITORY']
+          p='repo.json'
+          data=json.load(open(p))
+          app=data['apps'][0]
+          app['localizedDescription']='Browse installed applications and device folders using worse_query. Export readable app bundles as IPAs and data folders as ZIPs. Requires a provisioned App Group retained during signing. Access depends on path and OS; App Store executable encryption is preserved.'
+          app['version']='0.2.0'
+          app['versionDate']=datetime.now(timezone.utc).strftime('%Y-%m-%d')
+          url='https://github.com/'+repo+'/releases/download/v0.2.0/AppVault-0.2.0.ipa'
+          app['downloadURL']=url
+          app['size']=os.path.getsize('AppVault-0.2.0.ipa')
+          app['versions']=[{'version':'0.2.0','buildVersion':'3','date':app['versionDate'],'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':'Integrated worse_query, application discovery, folder browser and backup export. Device access requires a provisioned App Group.'}]
+          data['description']=app['localizedDescription']
+          current=json.loads(subprocess.check_output(['gh','api','repos/'+repo+'/contents/repo.json']))
+          payload={'message':'Update FlareStore source for AppVault 0.2.0 [skip ci]','sha':current['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          open('feed-request.json','w').write(json.dumps(payload))
+          subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
+          PY
