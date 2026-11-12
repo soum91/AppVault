@@ -1,0 +1,32 @@
+{
+  "name": "AppVault",
+  "identifier": "com.soum91.appvault.source",
+  "subtitle": "App IPA and data backup utility",
+  "description": "AppVault can package IPA files selected in Files and, in a configured compatible build, back up readable app data containers. This unsigned prerelease must be signed before installation. Container backup is not enabled in this build.",
+  "website": "https://github.com/soum91/AppVault",
+  "tintColor": "#4F46E5",
+  "apps": [
+    {
+      "name": "AppVault",
+      "bundleIdentifier": "com.soum91.appvault",
+      "developerName": "soum91",
+      "subtitle": "Back up selected IPAs and app data",
+      "localizedDescription": "Unsigned prerelease 0.1.1 (2), built by GitHub Actions. Requires signing before installation. This build includes IPA import and archive export. worse_query container access is not configured or enabled yet.",
+      "tintColor": "#4F46E5",
+      "category": "utilities",
+      "versions": [
+        {
+          "version": "0.1.1",
+          "buildVersion": "2",
+          "marketingVersion": "0.1.1 (2) · unsigned prerelease",
+          "date": "2026-11-11",
+          "localizedDescription": "First FlareStore catalog build. Added IPA import and archive export; container access remains unconfigured.",
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.1.1/AppVault-unsigned.ipa",
+          "size": 57036,
+          "minOSVersion": "16.0"
+        }
+      ]
+    }
+  ],
+  "news": []
+}
