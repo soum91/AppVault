@@ -1,11 +1,10 @@
 # Changelog
 
-## 0.2.0 (3)
-- Integrated upstream worse_query and pathleak, replacing the disabled stub.
-- Added installed-app discovery, filesystem browsing, data-folder discovery and folder export.
-- Package readable .app bundles into Payload-based IPAs; export data as ZIP.
-- Added App Group entitlement discovery and explicit access errors.
-- Added launch-screen metadata and rebuilt the interface with Apps, Browse and Settings tabs.
+## 0.2.1 (4)
+- Discover individual application containers instead of requesting an unsupported parent-directory extension.
+- Fall back to path discovery when installed-application enumeration returns no results.
+- Normalize /private/var discovery paths and add scan cancellation.
+- Include an archive-box app icon in the iOS bundle and FlareStore source.
 
-## 0.1.1 (2)
-- Added version metadata and FlareStore source.
+## 0.2.0 (3)
+- Integrated worse_query, pathleak, folder browsing and backup export.

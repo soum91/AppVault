@@ -31,3 +31,5 @@
 NSArray<NSString *> *pathleak(NSString *filter, uint64_t max_inode);
 
 #endif /* pathleak_h */
+
+void AVPathCancel(void);

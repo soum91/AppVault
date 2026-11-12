@@ -33,40 +33,26 @@
 
 // It might be possible to derive a sane inode value automagically by just creating a file, doing stat() on it, getting *that* file's inode, then using that for the max_inode count.
 
+
+static int avCancelled = 0;
+void AVPathCancel(void) { __atomic_store_n(&avCancelled, 1, __ATOMIC_RELAXED); }
 NSArray<NSString *> *pathleak(NSString *path, uint64_t max_inode) {
-    // Sanity checks
-    if (path.length == 0 || max_inode < 1) return nil;
-    NSString *dir = path;
-    while (dir.length > 1 && [dir hasSuffix: @"/"]) { // Trim trailing slash (if present)
-        dir = [dir substringToIndex: dir.length - 1];
-    }
-    
-    // Set everything up
+    __atomic_store_n(&avCancelled, 0, __ATOMIC_RELAXED);
     struct statfs sfs;
-    if (statfs(dir.fileSystemRepresentation, &sfs) != 0) return nil;
+    // The volume can be identified without asking for parent-container access.
+    if (statfs("/private/var", &sfs) != 0) return @[];
     fsid_t fsid = sfs.f_fsid;
-    
-    char prefix[PATH_MAX];
-    if (![dir getFileSystemRepresentation: prefix maxLength: sizeof(prefix)]) return nil;
-    size_t prefix_length = strlen(prefix);
-    if (prefix_length == 1 && prefix[0] == '/') prefix_length = 0;
-    
-    NSFileManager *files = [NSFileManager defaultManager];
-    NSMutableArray<NSString *> *result = [NSMutableArray array];
+    NSString *prefix = [[path stringByReplacingOccurrencesOfString:@"/private/var/" withString:@"/var/"] stringByAppendingString:@"/"];
+    NSMutableOrderedSet *result = [NSMutableOrderedSet orderedSet];
     char buffer[PATH_MAX];
-    
-    // Brute-force inodes to their corresponding paths
-    // I'd like to make this multithreaded at some point, but I don't think it'll help.
     for (uint64_t inode = 1; inode <= max_inode; inode++) {
+        if (__atomic_load_n(&avCancelled, __ATOMIC_RELAXED)) break;
         ssize_t n = fsgetpath(buffer, sizeof(buffer), &fsid, inode);
         if (n <= 0) continue;
-        
-        if (strncmp(buffer, prefix, prefix_length) != 0) continue;
-        if (buffer[prefix_length] != '/') continue;
-        if (strchr(buffer + prefix_length + 1, '/')) continue;
-        
-        NSString *string = [files stringWithFileSystemRepresentation: buffer length: strlen(buffer)];
-        if (string) [result addObject: string];
+        NSString *candidate = [[NSString stringWithUTF8String:buffer] stringByReplacingOccurrencesOfString:@"/private/var/" withString:@"/var/"];
+        if (![candidate hasPrefix:prefix]) continue;
+        NSString *relative = [candidate substringFromIndex:prefix.length];
+        if (relative.length && ![relative containsString:@"/"]) [result addObject:candidate];
     }
-    return result;
+    return result.array;
 }

@@ -71,6 +71,7 @@ final class BackupService: ObservableObject {
 
     func browse(_ destination: String) {
         let target = URL(fileURLWithPath: destination).standardizedFileURL.path
+        if target == "/var/mobile/Containers/Data/Application" || target == "/private/var/mobile/Containers/Data/Application" { discoverData(); return }
         work("Opening folder…") {
             let rows = try self.withAccess(target) {
                 try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: target), includingPropertiesForKeys: [.isDirectoryKey])
@@ -91,21 +92,42 @@ final class BackupService: ObservableObject {
                                bundlePath: raw["bundleURL"] as? String,
                                dataPath: raw["dataContainerURL"] as? String)
             }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            guard !rows.isEmpty else { throw VaultFailure(message: "Installed-app enumeration returned no results. Use Browse or Discover Data Folders.") }
+            if rows.isEmpty {
+                DispatchQueue.main.async { self.status = "Discovering app containers. This scan can take several minutes…" }
+                let discovered = try self.discoverRows()
+                let apps = discovered.map { InstalledEntry(name: $0.name, bundleID: $0.path, bundlePath: nil, dataPath: $0.path) }
+                DispatchQueue.main.async { self.apps = apps; self.entries = discovered }
+                return
+            }
             DispatchQueue.main.async { self.apps = rows }
         }
     }
 
+    func cancelDiscovery() { AVPathCancel() }
+
+    private func discoverRows() throws -> [FileEntry] {
+        let baseline = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data([0]).write(to: baseline)
+        defer { try? FileManager.default.removeItem(at: baseline) }
+        let attrs = try FileManager.default.attributesOfItem(atPath: baseline.path)
+        let inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
+        let found = pathleak("/var/mobile/Containers/Data/Application", inode) ?? []
+        return found.map { path in
+            var name = URL(fileURLWithPath: path).lastPathComponent
+            try? self.withAccess(path) {
+                var buffer = [CChar](repeating: 0, count: 1024)
+                let n = getxattr(path, "com.apple.containermanager.identifier", &buffer, 1023, 0, 0)
+                if n > 0 { name = String(cString: buffer) }
+            }
+            return FileEntry(path: path, name: name, directory: true)
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     func discoverData() {
-        work("Discovering data folders. This can take several minutes…") {
-            let baseline = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            try Data([0]).write(to: baseline)
-            defer { try? FileManager.default.removeItem(at: baseline) }
-            let attrs = try FileManager.default.attributesOfItem(atPath: baseline.path)
-            let inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
-            let found = pathleak("/var/mobile/Containers/Data/Application", inode) ?? []
-            let rows = found.map { FileEntry(path: $0, name: URL(fileURLWithPath: $0).lastPathComponent, directory: true) }
+        work("Discovering individual app folders. You can cancel this scan…") {
+            let rows = try self.discoverRows()
             DispatchQueue.main.async { self.entries = rows; self.path = "/var/mobile/Containers/Data/Application" }
+            if rows.isEmpty { throw VaultFailure(message: "No individual containers were discovered. The scan may have been cancelled or path discovery may be restricted on this device.") }
         }
     }
 

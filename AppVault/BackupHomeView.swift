@@ -67,14 +67,14 @@ struct BackupHomeView: View {
                     Section("IPA Backups") {
                         Text("Exporting a readable .app folder creates Payload/App.app inside an IPA. App Store executables may remain encrypted. A sandbox extension does not decrypt them or guarantee access to the Bundle directory.").font(.footnote)
                     }
-                    Section("Version") { Text("AppVault 0.2.0 (3)") }
+                    Section("Version") { Text("AppVault 0.2.1 (4)") }
                 }.navigationTitle("Settings")
             }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(2)
         }
         .disabled(service.busy)
         .safeAreaInset(edge: .bottom) {
             if service.busy {
-                HStack { ProgressView(); Text(service.status).font(.footnote) }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
+                HStack { ProgressView(); Text(service.status).font(.footnote); Button("Cancel Scan") { service.cancelDiscovery() } }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
             }
         }
         .alert("Access or Backup Error", isPresented: Binding(get: { service.error != nil }, set: { if !$0 { service.error = nil } })) {
