@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 (2)
+
+- Added version metadata to the generated iOS app.
+- Published the unsigned test IPA and added the FlareStore-compatible source listing.
+
 ## 0.1.0 (1)
 
 - Added IPA import, manifest packaging, and share-sheet export.
