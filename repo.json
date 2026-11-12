@@ -16,20 +16,22 @@
       "category": "utilities",
       "versions": [
         {
-          "version": "0.2.0",
-          "buildVersion": "3",
+          "version": "0.2.1",
+          "buildVersion": "4",
           "date": "2026-11-12",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.2.0/AppVault-0.2.0.ipa",
-          "size": 219450,
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.2.1/AppVault-0.2.1.ipa",
+          "size": 237308,
           "minOSVersion": "16.0",
           "localizedDescription": "Integrated worse_query, application discovery, folder browser and backup export. Device access requires a provisioned App Group."
         }
       ],
-      "version": "0.2.0",
+      "version": "0.2.1",
       "versionDate": "2026-11-12",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.2.0/AppVault-0.2.0.ipa",
-      "size": 219450
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.2.1/AppVault-0.2.1.ipa",
+      "size": 237308,
+      "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     }
   ],
-  "news": []
+  "news": [],
+  "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 }
