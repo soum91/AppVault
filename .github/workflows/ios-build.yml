@@ -13,6 +13,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Block packaging on installed-version contract failures
+        run: python3 scripts/check_version_ui.py
       - name: Install build tools
         run: brew install xcodegen ldid
       - run: xcodegen generate
