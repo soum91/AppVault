@@ -5,7 +5,7 @@ This repository participates in the owner's installed-version standard. These ru
 1. Every installed app must visibly show its **actual installed version and build number** in an accessible app screen (prefer Settings > About; use an appropriate equivalent on TV, Watch, or desktop).
 2. Read the values from the installed package metadata at runtime: iOS/watchOS Info.plist, Android PackageManager, Windows assembly/product version, or Tauri app version. Never display a hardcoded GitHub tag, feed version, or latest-available version as if installed.
 3. Keep the UI version, packaged version/build, GitHub release, and app catalog feed consistent. Increment package version/build for each release as the platform and sideloader require.
-4. Maintain an accessible runtime version/build display. If a version UI contract manifest is introduced, keep it accurate and enforce it; do not invent an existing gate.
+4. Maintain the runtime display in `AppVault/BackupHomeView.swift` using `Bundle.main` Info.plist metadata. Keep `version-ui-contract.json`, `scripts/check_version_ui.py`, and `.github/workflows/version-ui.yml` accurate; run the checker as a blocking preflight in `.github/workflows/ios-build.yml`.
 5. Before publishing, verify version/build metadata and UI using the checks actually present in this repository. Do not claim tests ran unless they did.
 6. This is a source-level regression guard. CI compilation and, when feasible, actual device UI checks remain important. Add stronger tests when new platforms are introduced.
 
