@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "platforms": [
+    {
+      "platform": "ios",
+      "target": "AppVault",
+      "settingsView": "AppVault/BackupHomeView.swift",
+      "project": "project.yml",
+      "versionKey": "CFBundleShortVersionString",
+      "buildKey": "CFBundleVersion"
+    }
+  ]
+}
