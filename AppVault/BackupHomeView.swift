@@ -67,7 +67,11 @@ struct BackupHomeView: View {
                     Section("IPA Backups") {
                         Text("Exporting a readable .app folder creates Payload/App.app inside an IPA. App Store executables may remain encrypted. A sandbox extension does not decrypt them or guarantee access to the Bundle directory.").font(.footnote)
                     }
-                    Section("Version") { Text("AppVault 0.2.1 (4)") }
+                    Section("Installed Version") {
+                        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+                        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+                        Text("AppVault \(version) (\(build))").textSelection(.enabled)
+                    }
                 }.navigationTitle("Settings")
             }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(2)
         }
