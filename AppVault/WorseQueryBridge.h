@@ -4,7 +4,7 @@
 NSArray<NSString *> *AVGroups(void);
 NSArray<NSDictionary *> *AVInstalledApps(void);
 
-NSArray<NSDictionary *> *AVDiscoverApps(void (^progress)(NSString *));
+NSArray<NSDictionary *> * _Nonnull AVDiscoverApps(void (^ _Nonnull progress)(NSString * _Nonnull));
 void AVDiscoveryCancel(void);
-NSString *AVDiscoveryStatus(void);
-NSString *AVDiscoveryLog(void);
+NSString * _Nonnull AVDiscoveryStatus(void);
+NSString * _Nonnull AVDiscoveryLog(void);

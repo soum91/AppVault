@@ -133,7 +133,7 @@ NSArray<NSDictionary *> *AVDiscoverApps(void (^progress)(NSString *)) {
             if(rows.count) { [NSUserDefaults.standardUserDefaults removeObjectForKey:@"AVDatabaseScanCursor"]; lastStatus=[NSString stringWithFormat:@"%lu app containers read from LaunchServices",(unsigned long)rows.count]; return rows; }
             lastStatus=@"Located the LaunchServices database, but could not read or decode its container records. See Diagnostics for sandbox and parser results.";
         } else {
-            [NSUserDefaults.standardUserDefaults setObject:@(next) forKey:@"AVDatabaseScanCursor"];
+            [NSUserDefaults.standardUserDefaults setObject:@(MIN(cursor,next+16384)) forKey:@"AVDatabaseScanCursor"];
             lastStatus=__atomic_load_n(&cancelled,__ATOMIC_RELAXED) ? @"Discovery cancelled. Refresh resumes from the saved search position." : @"No LaunchServices database found in this 20-second search. Refresh continues from the saved position; the app does not start an unlimited full-volume scan.";
         }
         return @[];
