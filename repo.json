@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "App IPA and data backup utility",
-  "description": "Browse installed applications and device folders using worse_query. Export readable app bundles as IPAs and data folders as ZIPs. Requires a provisioned App Group retained during signing. Access depends on path and OS; App Store executable encryption is preserved.",
+  "description": "Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
@@ -11,24 +11,24 @@
       "bundleIdentifier": "com.soum91.appvault",
       "developerName": "soum91",
       "subtitle": "Back up selected IPAs and app data",
-      "localizedDescription": "Browse installed applications and device folders using worse_query. Export readable app bundles as IPAs and data folders as ZIPs. Requires a provisioned App Group retained during signing. Access depends on path and OS; App Store executable encryption is preserved.",
+      "localizedDescription": "Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.",
       "tintColor": "#4F46E5",
       "category": "utilities",
       "versions": [
         {
-          "version": "0.2.1",
-          "buildVersion": "4",
-          "date": "2026-11-13",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.2.1/AppVault-0.2.1.ipa",
-          "size": 238872,
+          "version": "0.3.0",
+          "buildVersion": "5",
+          "date": "2026-11-15",
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.0/AppVault-0.3.0.ipa",
+          "size": 280251,
           "minOSVersion": "16.0",
-          "localizedDescription": "Integrated worse_query, application discovery, folder browser and backup export. Device access requires a provisioned App Group."
+          "localizedDescription": "Bounded database search, signed-group preflight and discovery report. Physical-device access remains unverified. No installed IPA extraction on iOS 27.0.1."
         }
       ],
-      "version": "0.2.1",
-      "versionDate": "2026-11-13",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.2.1/AppVault-0.2.1.ipa",
-      "size": 238872,
+      "version": "0.3.0",
+      "versionDate": "2026-11-15",
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.0/AppVault-0.3.0.ipa",
+      "size": 280251,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     }
   ],
