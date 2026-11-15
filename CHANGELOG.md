@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.3.0] - 2026-11-15
+
+## Verified changes since v0.2.1
+
+- Use typed name adapters for the vendored database parser ([`09d5f003`](https://github.com/soum91/AppVault/commit/09d5f0034b5f7cc07acae512b15935255b0386ee); `AppVault/Discovery/WQLocalization.h`)
+- Define discovery bridge nullability and preserve interrupted scan chunks ([`d7f61150`](https://github.com/soum91/AppVault/commit/d7f611501c293fa355c2ae43535da178f1d7f8ab); `AppVault/Discovery/AVDiscovery.m`, `AppVault/WorseQueryBridge.h`)
+- Replace unbounded discovery with LaunchServices database search and expose actual failures ([`b9af5040`](https://github.com/soum91/AppVault/commit/b9af50406bd1ab151b9853d3fa869416c6ae8e4f); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/BackupService.swift`, and 9 more)
+- ci: block AppVault IPA publication on version UI contract ([`0e489c8e`](https://github.com/soum91/AppVault/commit/0e489c8ebc0f8de219f19fbc54d1c4357b0bda33); `.github/workflows/ios-build.yml`)
+- ci: enforce AppVault installed version and build contract ([`466cffd2`](https://github.com/soum91/AppVault/commit/466cffd2cd9a7187c58e45ea08122b0d767f50c0); `.github/workflows/version-ui.yml`)
+- ci: enforce AppVault installed version and build contract ([`4379f2f9`](https://github.com/soum91/AppVault/commit/4379f2f9d47dad6914b01b0260a2b57af10174fe); `scripts/check_version_ui.py`)
+- ci: enforce AppVault installed version and build contract ([`ddaeea0f`](https://github.com/soum91/AppVault/commit/ddaeea0fe5ebd96a4bc1e158dc7551d18c4d78a6); `version-ui-contract.json`)
+- fix: display installed AppVault version and build from Info.plist ([`9c160acd`](https://github.com/soum91/AppVault/commit/9c160acd9b2d75ed1b70472f3d343eeeadda62d3); `AppVault/BackupHomeView.swift`)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.2.1...v0.3.0)
+
 ## 0.3.0 (5)
 
 - Replace automatic ascending full-volume container scans with a 20-second descending search for the LaunchServices database. Resume unsuccessful searches from a saved cursor.
