@@ -1,3 +1,3 @@
 #import <Foundation/Foundation.h>
-#define WQLocalized(s) (s)
-#define WQVerbatim(s) (s)
+static inline NSString *WQLocalized(NSString *s) { return s; }
+static inline NSString *WQVerbatim(NSString *s) { return s; }
