@@ -85,50 +85,36 @@ final class BackupService: ObservableObject {
     }
 
     func loadApps() {
-        work("Finding installed applications…") {
-            let rows = AVInstalledApps().map { raw in
-                InstalledEntry(name: raw["localizedName"] as? String ?? raw["bundleIdentifier"] as? String ?? "Application",
-                               bundleID: raw["bundleIdentifier"] as? String ?? UUID().uuidString,
-                               bundlePath: raw["bundleURL"] as? String,
-                               dataPath: raw["dataContainerURL"] as? String)
+        work("Locating LaunchServices database…") {
+            let raw = AVDiscoverApps { message in
+                DispatchQueue.main.async { self.status = message }
+            }
+            let rows = raw.map { item in
+                InstalledEntry(name: item["localizedName"] as? String ?? "Application",
+                               bundleID: item["bundleIdentifier"] as? String ?? UUID().uuidString,
+                               bundlePath: nil,
+                               dataPath: item["dataContainerURL"] as? String)
             }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            if rows.isEmpty {
-                DispatchQueue.main.async { self.status = "Discovering app containers. This scan can take several minutes…" }
-                let discovered = try self.discoverRows()
-                let apps = discovered.map { InstalledEntry(name: $0.name, bundleID: $0.path, bundlePath: nil, dataPath: $0.path) }
-                DispatchQueue.main.async { self.apps = apps; self.entries = discovered }
-                return
-            }
             DispatchQueue.main.async { self.apps = rows }
+            guard !rows.isEmpty else { throw VaultFailure(message: AVDiscoveryStatus()) }
         }
     }
-
-    func cancelDiscovery() { AVPathCancel() }
-
-    private func discoverRows() throws -> [FileEntry] {
-        let baseline = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try Data([0]).write(to: baseline)
-        defer { try? FileManager.default.removeItem(at: baseline) }
-        let attrs = try FileManager.default.attributesOfItem(atPath: baseline.path)
-        let inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
-        let found = pathleak("/var/mobile/Containers/Data/Application", inode) ?? []
-        return found.map { path in
-            var name = URL(fileURLWithPath: path).lastPathComponent
-            try? self.withAccess(path) {
-                var buffer = [CChar](repeating: 0, count: 1024)
-                let n = getxattr(path, "com.apple.containermanager.identifier", &buffer, 1023, 0, 0)
-                if n > 0 { name = String(cString: buffer) }
-            }
-            return FileEntry(path: path, name: name, directory: true)
-        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
+    func cancelDiscovery() { AVDiscoveryCancel() }
     func discoverData() {
-        work("Discovering individual app folders. You can cancel this scan…") {
-            let rows = try self.discoverRows()
+        work("Locating app data containers…") {
+            let rows = AVDiscoverApps { message in
+                DispatchQueue.main.async { self.status = message }
+            }.compactMap { item -> FileEntry? in
+                guard let path = item["dataContainerURL"] as? String else { return nil }
+                return FileEntry(path: path, name: item["localizedName"] as? String ?? path, directory: true)
+            }
             DispatchQueue.main.async { self.entries = rows; self.path = "/var/mobile/Containers/Data/Application" }
-            if rows.isEmpty { throw VaultFailure(message: "No individual containers were discovered. The scan may have been cancelled or path discovery may be restricted on this device.") }
+            if rows.isEmpty { throw VaultFailure(message: AVDiscoveryStatus()) }
         }
+    }
+    var report: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        return "AppVault \(info["CFBundleShortVersionString"] ?? "?") (\(info["CFBundleVersion"] ?? "?"))\niOS \(UIDevice.current.systemVersion)\n\(AVDiscoveryStatus())\n\(AVDiscoveryLog())"
     }
 
     func backup(_ source: String) {
