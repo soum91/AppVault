@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "AppVault and official IPA download tools",
-  "description": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains.",
+  "description": "Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
@@ -10,25 +10,25 @@
       "name": "AppVault",
       "bundleIdentifier": "com.soum91.appvault",
       "developerName": "soum91",
-      "subtitle": "Back up selected IPAs and app data",
-      "localizedDescription": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains.",
+      "subtitle": "IPA downloads and jailbreak decryption",
+      "localizedDescription": "Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified.",
       "tintColor": "#4F46E5",
       "category": "utilities",
       "versions": [
         {
-          "version": "0.4.4",
-          "buildVersion": "11",
+          "version": "0.5.0",
+          "buildVersion": "12",
           "date": "2026-11-17",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.4/AppVault-0.4.4.ipa",
-          "size": 508136,
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.5.0/AppVault-0.5.0.ipa",
+          "size": 549417,
           "minOSVersion": "16.0",
-          "localizedDescription": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains."
+          "localizedDescription": "Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified."
         }
       ],
-      "version": "0.4.4",
+      "version": "0.5.0",
       "versionDate": "2026-11-17",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.4/AppVault-0.4.4.ipa",
-      "size": 508136,
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.5.0/AppVault-0.5.0.ipa",
+      "size": 549417,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
