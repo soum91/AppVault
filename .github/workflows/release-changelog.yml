@@ -96,7 +96,7 @@ jobs:
                   return False
               return not bool(re.match(
                   r"^(merge\b|bump\b|release\b|changelog\b|version\b|update (source|sideload|feed|repo|version|metadata|json)\b|"
-                  r"(fix|update|improve|add|change|resolve|clean up) (bugs?|issues?|things?|stuff|app|code|project|misc|various|minor)\b|"
+                  r"(fix|update|improve|add|change|resolve|clean up) (bugs?|issues?|things?|stuff|app(?!-)|code|project|misc|various|minor)\b|"
                   r"(misc|minor|general|various) (changes|fixes|updates|improvements)\b)",
                   s, flags=re.I,
               ))
