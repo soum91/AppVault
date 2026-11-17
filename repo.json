@@ -16,19 +16,19 @@
       "category": "utilities",
       "versions": [
         {
-          "version": "0.4.2",
-          "buildVersion": "9",
+          "version": "0.4.3",
+          "buildVersion": "10",
           "date": "2026-11-17",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.2/AppVault-0.4.2.ipa",
-          "size": 491121,
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.3/AppVault-0.4.3.ipa",
+          "size": 508032,
           "minOSVersion": "16.0",
           "localizedDescription": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains."
         }
       ],
-      "version": "0.4.2",
+      "version": "0.4.3",
       "versionDate": "2026-11-17",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.2/AppVault-0.4.2.ipa",
-      "size": 491121,
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.3/AppVault-0.4.3.ipa",
+      "size": 508032,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
