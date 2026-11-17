@@ -65,6 +65,11 @@ struct DecryptableApp: Identifiable, Sendable {
                 let destination = payload.appendingPathComponent(source.lastPathComponent, isDirectory: true)
                 try fm.createDirectory(at: payload, withIntermediateDirectories: true)
                 try fm.copyItem(at: source, to: destination)
+                guard let info = NSDictionary(contentsOf: source.appendingPathComponent("Info.plist")) as? [String: Any],
+                      let executable = info["CFBundleExecutable"] as? String,
+                      !executable.contains("/"), fm.isReadableFile(atPath: source.appendingPathComponent(executable).path) else {
+                    throw VaultFailure(message: "Installed app has no readable main executable")
+                }
                 var enumerationError: Error?
                 guard let items = fm.enumerator(at: source, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey], errorHandler: { _, error in enumerationError = error; return false }) else {
                     throw VaultFailure(message: "Cannot enumerate installed bundle")
@@ -80,6 +85,7 @@ struct DecryptableApp: Identifiable, Sendable {
                     let relative = String(binary.path.dropFirst(source.path.count + 1))
                     let target = destination.appendingPathComponent(relative)
                     DispatchQueue.main.async { self.status = "Decrypting \(relative)" }
+                    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: target.path)
                     let count = AVDecryptMachO(binary.path, target.path, &detail, detail.count)
                     guard count == encrypted else { throw VaultFailure(message: "\(relative): \(String(cString: detail))") }
                     guard AVInspectMachO(target.path, &detail, detail.count) == 0 else { throw VaultFailure(message: "Verification failed: encrypted slices remain in \(relative)") }
@@ -88,13 +94,16 @@ struct DecryptableApp: Identifiable, Sendable {
                 }
                 if let enumerationError { throw enumerationError }
                 // Re-scan every regular file, including extensions and nested frameworks.
-                guard let verify = fm.enumerator(at: destination, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) else { throw VaultFailure(message: "Cannot verify output bundle") }
+                var verificationError: Error?
+                guard let verify = fm.enumerator(at: destination, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey], errorHandler: { _, error in verificationError = error; return false }) else { throw VaultFailure(message: "Cannot verify output bundle") }
                 for case let binary as URL in verify {
                     let values = try binary.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                    if values.isSymbolicLink == true { throw VaultFailure(message: "Bundle symlinks are unsupported; export rejected to avoid unchecked binaries") }
                     guard values.isRegularFile == true, values.isSymbolicLink != true else { continue }
                     var detail = [CChar](repeating: 0, count: 512)
                     guard AVInspectMachO(binary.path, &detail, detail.count) == 0 else { throw VaultFailure(message: "Output verification failed for \(binary.lastPathComponent)") }
                 }
+                if let verificationError { throw verificationError }
                 let folder = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("IPAs", isDirectory: true)
                 try fm.createDirectory(at: folder, withIntermediateDirectories: true)
                 // Never overwrite an earlier export or an encrypted App Store download.
