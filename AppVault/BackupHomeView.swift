@@ -2,95 +2,93 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct BackupHomeView: View {
-    @StateObject private var service = BackupService()
-    @State private var tab = 0
-    @State private var destination = "/var/mobile/Containers/Data/Application"
+    @StateObject private var store = IPAToolService()
     var body: some View {
-        TabView(selection: $tab) {
+        TabView {
             NavigationStack {
                 List {
-                    Section {
-                        Button { service.loadApps() } label: { Label("Find Installed Apps", systemImage: "arrow.clockwise") }
-                        Text("Discover app data containers, open a folder, then export its ZIP backup.").font(.footnote).foregroundStyle(.secondary)
-                    }
-                    ForEach(service.apps) { app in
-                        Section(app.name) {
-                            Text(app.bundleID).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                            if let path = app.bundlePath {
-                                Button("Browse App Bundle") { open(path) }
-                            }
-                            if let path = app.dataPath {
-                                Button("Browse App Data") { open(path) }
-                            }
+                    if !store.capable { capability }
+                    if !store.signedIn {
+                        Text("Sign in under Account to search and save App Store IPA packages.")
+                    } else {
+                        HStack {
+                            TextField("Find an App Store app", text: $store.query).onSubmit { store.search() }
+                            Button("Search") { store.search() }.disabled(store.busy)
+                        }
+                        ForEach(store.apps) { app in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(app.trackName ?? app.bundleId ?? "App").font(.headline)
+                                Text("\(app.bundleId ?? "") · \(app.version ?? "")").font(.caption).foregroundStyle(.secondary)
+                                Button { store.download(app) } label: { Label("Save IPA", systemImage: "arrow.down.doc") }.disabled(store.busy)
+                            }.padding(.vertical, 5)
                         }
                     }
-                }
-                .navigationTitle("Applications")
-            }.tabItem { Label("Apps", systemImage: "square.grid.2x2") }.tag(0)
+                }.navigationTitle("AppVault")
+            }.tabItem { Label("Search", systemImage: "magnifyingglass") }
             NavigationStack {
                 List {
-                    Section {
-                        HStack {
-                            TextField("Folder path", text: $destination).textInputAutocapitalization(.never).autocorrectionDisabled()
-                            Button("Go") { service.browse(destination) }
-                        }
-                        Text(service.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                        HStack {
-                            Button { open(URL(fileURLWithPath: service.path).deletingLastPathComponent().path) } label: { Label("Up", systemImage: "arrow.up") }
-                            Spacer()
-                            Button { service.backup(service.path) } label: { Label("Back Up Folder", systemImage: "archivebox") }
-                        }
+                    if store.downloads.isEmpty { Text("Saved IPA files will appear here.").foregroundStyle(.secondary) }
+                    ForEach(store.downloads, id: \.self) { url in
+                        ShareLink(item: url) { Label(url.lastPathComponent, systemImage: "doc.zipper") }
                     }
-                    Section("Folders and Files") {
-                        ForEach(service.entries) { entry in
-                            HStack {
-                                Button { if entry.directory { open(entry.path) } } label: {
-                                    Label(entry.name, systemImage: entry.directory ? "folder" : "doc").lineLimit(2)
-                                }.buttonStyle(.plain)
-                                Spacer()
-                                Button { service.backup(entry.path) } label: { Image(systemName: "square.and.arrow.up") }
-                            }.padding(.vertical, 4)
-                        }
-                    }
-                }
-                .navigationTitle("Browse")
-            }.tabItem { Label("Browse", systemImage: "folder") }.tag(1)
+                }.navigationTitle("Saved IPAs").refreshable { store.refreshDownloads() }
+            }.tabItem { Label("IPAs", systemImage: "archivebox") }
             NavigationStack {
                 Form {
-                    Section("Access") {
-                        TextField("App Group", text: $service.group).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        Button("Application Data") { open("/var/mobile/Containers/Data/Application") }
-                        Button("Shared App Groups") { open("/var/mobile/Containers/Shared/AppGroup") }
-                        Button("Discover Data Folders") { tab = 1; service.discoverData() }
-                        Text("Database discovery stops after 20 seconds. Refresh resumes the search. A usable App Group is required.").font(.footnote)
+                    capability
+                    Section("Apple Account") {
+                        if store.signedIn {
+                            Text("Signed in")
+                            Button("Sign Out", role: .destructive) { store.signOut() }.disabled(store.busy)
+                        } else {
+                            TextField("Email or phone number", text: $store.email).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).disabled(!store.capable || store.busy)
+                            SecureField("Password", text: $store.password).textContentType(.password).disabled(!store.capable || store.busy)
+                            if store.needsCode { TextField("Verification code", text: $store.code).keyboardType(.numberPad).textContentType(.oneTimeCode) }
+                            Button("Sign In") { store.signIn() }.disabled(store.busy || !store.capable)
+                        }
                     }
-                    Section("IPA Backups") {
-                        Text("On iOS 27.0.1, worse_query does not provide access to installed app bundles. This build can attempt app-data ZIP backups; it cannot extract installed IPAs on that OS.").font(.footnote)
+                    Section {
+                        Text("Uses the open-source ipatool backend directly inside AppVault. Session tokens and provisioning state are stored in this app's Keychain. Your password is not saved after sign-in. No extra root certificate is required.").font(.footnote)
+                        Text("Downloads account-authorized packages from Apple. Apple DRM remains; saving an IPA does not guarantee it can be installed through a sideloader.").font(.footnote)
                     }
-                    Section("Diagnostics") { NavigationLink("Discovery Report") { DiscoveryReport(text: service.report) } }
+                }.navigationTitle("Account")
+            }.tabItem { Label("Account", systemImage: "person.crop.circle") }
+            NavigationStack {
+                Form {
                     Section("Installed Version") {
                         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
                         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
                         Text("AppVault \(version) (\(build))").textSelection(.enabled)
                     }
+                    Section("Backend") {
+                        Text("ipatool · b352566155a6").textSelection(.enabled)
+                        Link("Source and license", destination: URL(string: "https://github.com/majd/ipatool")!)
+                        Text("Experimental iOS integration. Login and IPA downloads have not been verified on a physical device. Keep AppVault open while downloading. The initial authentication runtime download can take time.").font(.footnote)
+                    }
                 }.navigationTitle("Settings")
-            }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(2)
+            }.tabItem { Label("Settings", systemImage: "gearshape") }
         }
-        .disabled(service.busy)
         .safeAreaInset(edge: .bottom) {
-            if service.busy {
-                HStack { ProgressView(); Text(service.status).font(.footnote); Button("Cancel Scan") { service.cancelDiscovery() } }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
+            if store.busy {
+                HStack { ProgressView(); Text(store.status).font(.footnote); Spacer(); Button("Cancel") { store.cancel() } }.padding().background(.regularMaterial)
             }
         }
-        .alert("Access or Backup Error", isPresented: Binding(get: { service.error != nil }, set: { if !$0 { service.error = nil } })) {
-            Button("OK") { service.error = nil }
-        } message: { Text(service.error ?? "") }
-        .sheet(isPresented: Binding(get: { service.exported != nil }, set: { if !$0 { service.exported = nil } })) {
-            if let url = service.exported { ShareSheet(url: url) }
+        .alert("AppVault", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+            Button("OK") { store.error = nil }
+        } message: { Text(store.error ?? "") }
+        .sheet(isPresented: Binding(get: { store.exported != nil }, set: { if !$0 { store.exported = nil } })) {
+            if let url = store.exported { ShareSheet(url: url) }
         }
-        .onAppear { if service.apps.isEmpty { service.loadApps() } }
     }
-    private func open(_ path: String) { destination = path; tab = 1; service.browse(path) }
+    private var capability: some View {
+        Section("ipatool Runtime") {
+            Label(store.capable ? "Executable memory available" : "JIT required", systemImage: store.capable ? "checkmark.circle" : "exclamationmark.triangle")
+            if !store.capable {
+                Text("iOS denied the executable memory needed by ipatool. Enable JIT for AppVault or use a compatible jailbreak. worse_query alone does not enable JIT.").font(.footnote)
+            }
+            Button("Check Again") { store.refreshCapability() }
+        }
+    }
 }
 private struct ShareSheet: UIViewControllerRepresentable {
     let url: URL
@@ -105,7 +103,7 @@ private struct ReportDocument: FileDocument {
     init(configuration: ReadConfiguration) throws { text = String(decoding: configuration.file.regularFileContents ?? Data(), as: UTF8.self) }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: Data(text.utf8)) }
 }
-private struct DiscoveryReport: View {
+struct DiscoveryReport: View {
     let text: String
     @State private var saving = false
     @State private var feedback = ""

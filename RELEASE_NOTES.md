@@ -1,9 +1,10 @@
-# AppVault 0.3.1 (6)
+AppVault 0.4.0 (7), experimental build artifact
 
-- Fix the app-data backup failure on Apple's protected .com.apple.mobile_container_manager.metadata.plist by copying Documents and Library rather than the whole container.
-- Exclude Library/Caches, tmp and container-management files; record exclusions and copied file/byte counts in backup-manifest.json.
-- Continue to abort on unreadable user data or symbolic links; remove incomplete ZIP output on archive failure.
-- Add host regression fixtures covering protected metadata, preserved data, exclusions, unreadable user files and symbolic links.
+- Replaces the primary app-data browser with native Apple Account, App Store search, IPA download and saved-file sharing screens.
+- Links majd/ipatool at b352566155a667d8aaeabaa7ecec4966080f92ab into the app process through a Go C archive. Uses upstream's pinned Unicorn 2.1.4 source, integrity check and iOS W^X patch.
+- Checks executable-memory capability before sign-in. This backend requires JIT or a compatible jailbreak; worse_query alone is insufficient. No JIT enablement mechanism is included.
+- Stores tokens and provisioning state in device-only Keychain storage. Strips the login password before persisting upstream account records. Uses a private random persistent device identity rather than reading a hardware address.
+- Reports download byte progress and supports cancellation during runtime preparation and file transfer. Apple authentication requests may finish before cancellation takes effect.
+- Apple DRM remains. This downloads Apple-authorized packages, not installed-app binary extraction.
 
-Evidence: AppVault/AppDataCopy.swift, BackupService.swift and Tests/main.swift in this release.
-Validation: host fixtures and device compilation run in GitHub Actions before publication. The reported physical-device metadata failure has not been retested on the user's device. This remains app-data ZIP backup; installed IPA extraction on iOS 27.0.1 remains unsupported.
+Validation: password-stripping and credential-clearing fixtures run in CI before packaging; installed-version preflight and iOS compilation are required. Physical-device authentication, JIT compatibility, clipboard/export and IPA reinstallation are unverified. Artifact-only; do not update the FlareStore feed or publish as a working replacement until device testing succeeds.
