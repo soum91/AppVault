@@ -1,0 +1,19 @@
+name: Catalog official DLiPA
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/catalog_dlipa.py
+      - .github/workflows/catalog-dlipa.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate official IPA and publish source entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/catalog_dlipa.py

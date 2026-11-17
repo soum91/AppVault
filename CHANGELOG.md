@@ -1,5 +1,11 @@
 # Changelog
 
+## Catalog update
+
+- Add a separately attributed DLiPA entry pointing to the official AhmedBafkir release asset, with bundle/version/build read from the actual IPA.
+- Clarify that DLiPA downloads App Store packages through an Apple Account; it does not extract the installed binary. No AppVault application feature is claimed by this catalog addition.
+
+
 ## 0.3.1 (6)
 
 - Fix the app-data backup failure on Apple's protected .com.apple.mobile_container_manager.metadata.plist by copying Documents and Library rather than the whole container.
