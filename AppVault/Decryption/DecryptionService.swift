@@ -89,7 +89,7 @@ struct DecryptableApp: Identifiable, Sendable {
                     let count = AVDecryptMachO(binary.path, target.path, &detail, detail.count)
                     guard count == encrypted else { throw VaultFailure(message: "\(relative): \(String(cString: detail))") }
                     guard AVInspectMachO(target.path, &detail, detail.count) == 0 else { throw VaultFailure(message: "Verification failed: encrypted slices remain in \(relative)") }
-                    binaries += 1; decrypted += count
+                    binaries += 1; decrypted += Int(count)
                     DispatchQueue.main.async { self.log += "Verified \(relative): \(count) decrypted slice(s)\n" }
                 }
                 if let enumerationError { throw enumerationError }
