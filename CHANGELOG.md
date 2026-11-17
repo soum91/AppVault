@@ -1,5 +1,11 @@
 # Changelog
 
+## Catalog correction
+
+- Remove the DLiPA third-party listing and its catalog workflow/script. Adding an external application did not implement the requested IPA backup feature in AppVault.
+- Clarify the current AppVault source description; no new app functionality is claimed.
+
+
 ## Catalog update
 
 - Add a separately attributed DLiPA entry pointing to the official AhmedBafkir release asset, with bundle/version/build read from the actual IPA.
