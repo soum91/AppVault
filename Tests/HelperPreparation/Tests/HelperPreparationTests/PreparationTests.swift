@@ -58,7 +58,7 @@ final class PreparationTests: XCTestCase {
         try fixture { _, template, root in
             let bad = root.appendingPathComponent("bad.ipa")
             let archive = try Archive(url: bad, accessMode: .create)
-            try archive.addEntry(with: "../outside", type: .file, uncompressedSize: 1) { _, _ in Data([42]) }
+            try archive.addEntry(with: "../outside", type: .file, uncompressedSize: Int64(1)) { _, _ in Data([42]) }
             XCTAssertThrowsError(try HelperPreparation.prepare(ipa: bad, template: template, folder: root.appendingPathComponent("out")) { _ in })
             XCTAssertFalse(fm.fileExists(atPath: root.deletingLastPathComponent().appendingPathComponent("outside").path))
         }
