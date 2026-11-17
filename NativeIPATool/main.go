@@ -156,7 +156,7 @@ func execute(in request) (out response) {
 		}
 	}
 	if err != nil {
-		out.Error = err.Error()
+		out.Error = redactError(err.Error(), in, v)
 		if errors.Is(err, appstore.ErrAuthCodeRequired) {
 			out.Code = "two_factor"
 		}

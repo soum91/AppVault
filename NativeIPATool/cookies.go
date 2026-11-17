@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"path"
 	"sync"
+	"time"
 )
 
 type savedCookie struct {
@@ -26,7 +28,7 @@ func newSecureJar(v vault) *secureJar {
 		var entries map[string]savedCookie
 		if json.Unmarshal(data, &entries) == nil {
 			for k, e := range entries {
-				if u, err := url.Parse(e.URL); err == nil && e.Cookie != nil {
+				if u, err := url.Parse(e.URL); err == nil && e.Cookie != nil && (e.Cookie.Expires.IsZero() || e.Cookie.Expires.After(time.Now())) {
 					base.SetCookies(u, []*http.Cookie{e.Cookie})
 					j.entries[k] = e
 				}
@@ -44,15 +46,22 @@ func (j *secureJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
 		if domain == "" {
 			domain = u.Hostname()
 		}
-		path := c.Path
-		if path == "" {
-			path = u.EscapedPath()
+		cookiePath := c.Path
+		if cookiePath == "" {
+			cookiePath = path.Dir(u.Path)
+			if cookiePath == "." {
+				cookiePath = "/"
+			}
 		}
-		key := domain + "\n" + path + "\n" + c.Name
+		key := domain + "\n" + cookiePath + "\n" + c.Name
 		if c.MaxAge < 0 {
 			delete(j.entries, key)
 		} else {
 			copy := *c
+			if copy.MaxAge > 0 {
+				copy.Expires = time.Now().Add(time.Duration(copy.MaxAge) * time.Second)
+				copy.MaxAge = 0
+			}
 			j.entries[key] = savedCookie{u.String(), &copy}
 		}
 	}

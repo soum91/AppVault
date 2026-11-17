@@ -72,6 +72,11 @@ private enum VaultKeychain {
     private var state: [String: String] = [:]
     private var identity = ""
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+    var report: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+        return "AppVault \(version) (\(build))\nOS: \(UIDevice.current.systemVersion)\nBackend: ipatool b352566155a6\nExecutable memory: \(capable)\nStage: \(status)\nError: \(error ?? "None")\nDevice authentication and exports: unverified"
+    }
     var folder: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("IPAs", isDirectory: true) }
     init() {
         refreshCapability()
@@ -152,11 +157,11 @@ private enum VaultKeychain {
         needsCode = reply.code == "two_factor"
         if reply.ok {
             status = "Completed"
-            if let apps = reply.apps { self.apps = apps }
+            if operation == "search" { self.apps = reply.apps ?? [] }
             if let path = reply.path { refreshDownloads(); exported = URL(fileURLWithPath: path) }
         } else {
-            // Do not display raw server errors that could echo account fields.
-            error = needsCode ? "Apple requires a verification code. Enter it below and sign in again." : reply.code == "license_required" ? "This Apple Account has no license for this app. Get it in the App Store first, then retry." : "Apple authentication or the IPA download failed. ipatool returned an error; no successful backup is claimed. Check your account and connection, then retry."
+            // The bridge removes known secrets and credential fields before returning errors.
+            error = needsCode ? "Apple requires a verification code. Enter it below and sign in again." : reply.code == "license_required" ? "This Apple Account has no license for this app. Get it in the App Store first, then retry." : (reply.error ?? "ipatool failed without an error description.")
             status = "Failed"
         }
     }

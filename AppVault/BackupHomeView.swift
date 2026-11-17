@@ -60,6 +60,7 @@ struct BackupHomeView: View {
                         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
                         Text("AppVault \(version) (\(build))").textSelection(.enabled)
                     }
+                    Section("Diagnostics") { NavigationLink("Backend Report") { DiscoveryReport(text: store.report) } }
                     Section("Backend") {
                         Text("ipatool · b352566155a6").textSelection(.enabled)
                         Link("Source and license", destination: URL(string: "https://github.com/majd/ipatool")!)
@@ -121,7 +122,7 @@ struct DiscoveryReport: View {
                 Text(feedback).font(.footnote)
                 Text(text).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
             }.padding()
-        }.navigationTitle("Discovery Report")
+        }.navigationTitle("Backend Report")
         .fileExporter(isPresented: $saving, document: ReportDocument(text: text), contentType: .plainText, defaultFilename: "AppVault-discovery") {
             switch $0 { case .success: feedback = "Report saved."; case .failure(let error): feedback = error.localizedDescription }
         }
