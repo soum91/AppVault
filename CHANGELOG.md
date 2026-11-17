@@ -1,3 +1,13 @@
+# Changelog
+
+## [v0.4.3] - 2026-11-17
+
+## Verified changes since v0.4.2
+
+- Handle Apple verification sessions before HTTP errors and request trusted-device approval ([`acc5667c`](https://github.com/soum91/AppVault/commit/acc5667ccf9e57192bd653bcb6875c8b1c0ee39a); `.github/workflows/ios-build.yml`, `AppVault/AppleVerification.swift`, `AppVault/BackupHomeView.swift`, and 9 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.4.2...v0.4.3)
+
 # 0.4.4 (11) - account-bound verification
 
 AppVault 0.4.4 (11): account-bound verification sessions
