@@ -59,7 +59,7 @@ const UA='Configurator/2.21 (Macintosh; OS X 15.2; 24C5089c) AppleWebKit/0620.1.
   assert.ok(initial,'Bag did not advertise auth endpoint');
   let url=new URL(initial.replaceAll('&amp;','&'));url.searchParams.set('guid',guid);
   assert.equal(url.hostname,'auth.itunes.apple.com');
-  const body='<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>appleId</key><string>'+email+'</string><key>attempt</key><string>1</string><key>guid</key><string>'+guid+'</string><key>password</key><string>'+password+'</string><key>rmp</key><string>0</string><key>why</key><string>signIn</string></dict></plist>';
+  const body='<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>appleId</key><string>'+email+'</string><key>attempt</key><string>1</string><key>createSession</key><string>true</string><key>guid</key><string>'+guid+'</string><key>password</key><string>'+password+'</string><key>rmp</key><string>0</string><key>why</key><string>signIn</string></dict></plist>';
   await context.sapInitialize(guid,{proxyURL:'https://localhost/proxy'});
   const signature=await context.sapSign(Buffer.from(body).toString('base64'));
   await context.sapClose();

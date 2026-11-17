@@ -24,6 +24,19 @@ private final class CDNDelegate: NSObject, URLSessionTaskDelegate {
 }
 actor DirectAppleStore {
     private var state: DirectStoreState
+    private var verification: AppleVerificationSession?
+    private var verificationEmail: String?
+    private var trace: [String] = []
+    func diagnostics() -> String { trace.joined(separator: "\n") }
+    func verificationAvailable() -> Bool { verification != nil }
+    func clearVerification() { verification = nil; verificationEmail = nil }
+    private func record(_ response: HTTPURLResponse, data: Data, stage: String) {
+        let fields = StoreProtocol.responseFields(data)
+        let failure = String(describing: fields?["failureType"] ?? "")
+        let numeric = !failure.isEmpty && failure.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == "-") }) ? failure : "none"
+        trace.append("stage=\(stage); http=\(response.statusCode); bytes=\(data.count); structured=\(fields != nil); verification_session=\(AppleVerificationSession.from(response) != nil); challenge=\(fields.map(AppleVerificationSession.challenge) ?? false); failure=\(numeric)")
+        if trace.count > 30 { trace.removeFirst(trace.count - 30) }
+    }
     private var routingStorefront: String?
     private var routingPod: String?
     private let guid: String
@@ -43,7 +56,7 @@ actor DirectAppleStore {
         cdn = URLSession(configuration: downloadConfig, delegate: CDNDelegate(), delegateQueue: nil)
     }
     func snapshot() -> DirectStoreState { state }
-    func signOut() { state = DirectStoreState(account: nil, cookies: []) }
+    func signOut() { state = DirectStoreState(account: nil, cookies: []); clearVerification() }
     private func cookieHeader(_ url: URL) -> String {
         let cookies = state.cookies.compactMap(\.cookie).filter { c in
             let domain = c.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
@@ -73,7 +86,7 @@ actor DirectAppleStore {
             request.httpMethod = body == nil ? "GET" : "POST"; request.httpBody = body
             request.setValue(StoreProtocol.userAgent, forHTTPHeaderField: "User-Agent")
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-            request.setValue("application/xml", forHTTPHeaderField: "Accept")
+            request.setValue("*/*", forHTTPHeaderField: "Accept")
             request.setValue(cookieHeader(url), forHTTPHeaderField: "Cookie")
             if let account {
                 request.setValue(account.dsid, forHTTPHeaderField: "X-Dsid")
@@ -84,6 +97,7 @@ actor DirectAppleStore {
             if let extraHeaders { for (name, value) in try await extraHeaders(url) { request.setValue(value, forHTTPHeaderField: name) } }
             let (data, raw) = try await session.data(for: request)
             guard let response = raw as? HTTPURLResponse else { throw StoreProtocol.failure("non_http", "Apple returned a non-HTTP response.") }
+            record(response, data: data, stage: url.path.contains("bag.xml") ? "bag" : url.host == "auth.itunes.apple.com" ? "sign_in" : "store")
             retainCookies(response, url: url)
             if let storefront = response.value(forHTTPHeaderField: "X-Set-Apple-Store-Front") ?? response.value(forHTTPHeaderField: "X-Apple-Store-Front"), !storefront.isEmpty { routingStorefront = storefront }
             if let pod = response.value(forHTTPHeaderField: "pod"), !pod.isEmpty { routingPod = pod }
@@ -107,7 +121,7 @@ actor DirectAppleStore {
                 if let signature { headers["X-Apple-ActionSignature"] = signature }
                 return headers
             })
-            let fields = (try? StoreProtocol.dictionary(data, status: response.statusCode)) ?? [:]
+            let fields = StoreProtocol.responseFields(data) ?? [:]
             let action = (response.value(forHTTPHeaderField: "X-Apple-AMD-Action") ??
                 (fields["customerMessage"] as? String)?.split(separator: ":").last.map(String.init) ?? "").uppercased()
             if action == "RP", !didReset {
@@ -126,11 +140,34 @@ actor DirectAppleStore {
         }
         throw StoreProtocol.failure("store_proof_limit", "Store device verification exceeded its retry limit.")
     }
+    func requestTrustedDeviceApproval() async throws {
+        guard let context = verification else { throw StoreProtocol.failure("no_verification_session", "Apple did not provide a trusted-device approval session. Start sign-in again or use a verification code from your Apple Account settings.") }
+        _ = try await verificationRequest(context.request(), stage: "trusted_device_prompt")
+    }
+    private func verificationRequest(_ original: URLRequest, stage: String) async throws -> (Data, HTTPURLResponse) {
+        var request = original
+        guard request.url?.host == "idmsa.apple.com", request.url?.scheme == "https" else { throw StoreProtocol.failure("verification_origin", "Refused an unexpected verification destination.") }
+        request.setValue(cookieHeader(request.url!), forHTTPHeaderField: "Cookie")
+        let (data, raw) = try await session.data(for: request)
+        guard let response = raw as? HTTPURLResponse else { throw StoreProtocol.failure("verification_transport", "Apple returned no verification response.") }
+        record(response, data: data, stage: stage)
+        retainCookies(response, url: request.url!)
+        verification?.update(response)
+        guard (200..<300).contains(response.statusCode) else {
+            throw StoreProtocol.failure("verification_http_\(response.statusCode)", stage == "trusted_device_prompt" ? "Apple did not accept the trusted-device notification request. Try again or use a code from your Apple Account settings." : "Apple did not accept this verification code. Enter a current code or restart sign-in.")
+        }
+        return (data, response)
+    }
     func login(email: String, password: String, code: String) async throws {
         guard code.isEmpty || (code.count == 6 && code.allSatisfy({ $0.isASCII && $0.isNumber })) else {
             throw StoreProtocol.failure("invalid_code", "Enter a six-digit verification code.")
         }
-        if code.isEmpty { routingStorefront = nil; routingPod = nil }
+        if code.isEmpty { routingStorefront = nil; routingPod = nil; clearVerification() }
+        var sessionVerified = false
+        if !code.isEmpty, let context = verification, verificationEmail == email {
+            _ = try await verificationRequest(context.request(code: code), stage: "trusted_device_code")
+            sessionVerified = true
+        }
         let (bagData, bagResponse) = try await request(URL(string: "https://init.itunes.apple.com/bag.xml?guid=\(guid)&ix=6")!)
         let bag = try StoreProtocol.dictionary(bagData, status: bagResponse.statusCode)
         let urls = bag["urlBag"] as? [String: Any] ?? bag
@@ -141,12 +178,27 @@ actor DirectAppleStore {
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
         // Keep the native path exactly as advertised; forcing /fast breaks AMD.
         var items = components.queryItems ?? []; items.removeAll { $0.name == "guid" }; items.append(URLQueryItem(name: "guid", value: guid)); components.queryItems = items
-        let body = try StoreProtocol.loginBody(email: email, password: password, code: code, guid: guid)
+        let body = try StoreProtocol.loginBody(email: email, password: password, code: sessionVerified ? "" : code, guid: guid)
         let signer = await LocalSAPSigner.shared
         let signature = try await signer.sign(body, guid: guid, useCache: true, cacheSignature: false)
         let (data, response) = try await attested(components.url!, body: body, signature: signature)
+        let challengeFields = StoreProtocol.responseFields(data) ?? [:]
+        if AppleVerificationSession.isChallengeResponse(challengeFields, response: response), let context = AppleVerificationSession.from(response) {
+            verification = context; verificationEmail = email
+            do {
+                try await requestTrustedDeviceApproval()
+                throw StoreProtocol.failure("two_factor", "Approval requested. Check your trusted Apple devices, tap Allow if prompted, and enter the verification code below.")
+            } catch let failure as StoreFailure where failure.code == "two_factor" { throw failure
+            } catch {
+                throw StoreProtocol.failure("two_factor", "Apple opened a verification session, but the notification request did not complete. Use Request Approval to retry, or enter a current trusted-device code.")
+            }
+        }
+        if AppleVerificationSession.challenge(challengeFields), challengeFields["passwordToken"] == nil {
+            throw StoreProtocol.failure("two_factor", "Apple requires a verification code but did not return a session for requesting a device prompt. Enter a current code from a trusted device.")
+        }
         let fields = try StoreProtocol.dictionary(data, status: response.statusCode)
         state.account = try StoreProtocol.loginResult(fields, response: response, email: email, suppliedCode: !code.isEmpty, fallbackStorefront: routingStorefront, fallbackPod: routingPod)
+        clearVerification()
     }
     func search(_ term: String) async throws -> [StoreApp] {
         var components = URLComponents(string: "https://itunes.apple.com/search")!

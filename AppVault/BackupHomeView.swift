@@ -42,6 +42,9 @@ struct BackupHomeView: View {
                         } else {
                             TextField("Email or phone number", text: $store.email).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).disabled(store.busy)
                             SecureField("Password", text: $store.password).textContentType(.password).disabled(store.busy)
+                            if !store.verificationNotice.isEmpty { Text(store.verificationNotice).font(.footnote) }
+                            if store.canRequestApproval { Button("Request Approval on Other Devices") { store.requestApproval() }.disabled(store.busy) }
+                            if store.needsCode { Button("Cancel Verification") { store.cancel() } }
                             if store.needsCode { TextField("Verification code", text: $store.code).keyboardType(.numberPad).textContentType(.oneTimeCode) }
                             Button("Sign In") { store.signIn() }.disabled(store.busy)
                         }

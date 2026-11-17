@@ -2,6 +2,10 @@
 
 Native iOS app for account-authorized IPA downloads from Apple.
 
+## Trusted-device approval (0.4.3)
+
+The Account screen now handles Apple-issued verification sessions and can request a prompt on trusted devices, submit its code against the same session and resume Store sign-in. This is the AppVault Store login flow, not Apple's Settings sign-in sheet. A bare HTTP 406 is not assumed to be a verification challenge. Approval requests are available only when Apple provides valid session context. The client now accepts JSON/plist responses and requests session creation. Physical-device prompt delivery and actual account login remain unverified.
+
 ## Current authentication
 
 Version 0.4.2 replaces the unsigned 0.4.1 request with SAP signing, Store AMD device attestation (RP/SP provisioning) and kbsync IPA authorization. SAP alone was tested and did not reach business login; that candidate was not released. The replacement uses the local WebKit authentication runtime from mengangs/ipadn, pinned at `81dd1f747e71b31629979e2c1de0fe234fe7de39`. No jailbreak, user-enabled JIT, desktop helper or credential relay is required.

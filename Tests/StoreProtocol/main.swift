@@ -9,7 +9,7 @@ import Foundation
         }
         let body = try StoreProtocol.loginBody(email: "fixture@example.invalid", password: "a&<\"'", code: "123456", guid: "001122334455")
         let plist = try PropertyListSerialization.propertyList(from: body, options: [], format: nil) as! [String: String]
-        precondition(plist["password"] == "a&<\"'123456" && plist["createSession"] == nil && plist["attempt"] == "2")
+        precondition(plist["password"] == "a&<\"'123456" && plist["createSession"] == "true" && plist["attempt"] == "2")
         let initialBody = try StoreProtocol.loginBody(email: "fixture@example.invalid", password: "fixture", code: "", guid: "001122334455")
         let initial = try PropertyListSerialization.propertyList(from: initialBody, options: [], format: nil) as! [String: String]
         precondition(initial["attempt"] == "1")
@@ -27,6 +27,24 @@ import Foundation
         precondition(StoreProtocol.safeRelativePath("SC_Info/App.sinf"))
         precondition(StoreProtocol.validCDNURL(URL(string:"https://iosapps.itunes.apple.com/file.ipa")!))
         precondition(!StoreProtocol.validCDNURL(URL(string:"https://itunes.apple.com.evil.invalid/file.ipa")!))
+        let challengeResponse = HTTPURLResponse(url: origin, statusCode: 406, httpVersion: nil, headerFields: ["x-apple-id-session-id":"fixture-session", "scnt":"fixture-scnt"])!
+        let challengeData = Data("{\"authType\":\"hsa2\"}".utf8)
+        let challenge = StoreProtocol.responseFields(challengeData)!
+        precondition(AppleVerificationSession.challenge(challenge))
+        precondition(AppleVerificationSession.isChallengeResponse(challenge, response: challengeResponse))
+        precondition(!AppleVerificationSession.isChallengeResponse(["failureType":"invalid_password"], response: challengeResponse))
+        var context = AppleVerificationSession.from(challengeResponse)!
+        let prompt = try context.request()
+        precondition(prompt.httpMethod == "PUT" && prompt.url?.path == "/appleauth/auth/verify/trusteddevice")
+        precondition(prompt.value(forHTTPHeaderField:"scnt") == "fixture-scnt")
+        let codeRequest = try context.request(code:"123456")
+        let codeJSON = try JSONSerialization.jsonObject(with:codeRequest.httpBody!) as! [String:[String:String]]
+        precondition(codeJSON["securityCode"]?["code"] == "123456")
+        context.update(HTTPURLResponse(url:origin,statusCode:200,httpVersion:nil,headerFields:["scnt":"rotated"])!)
+        precondition(context.scnt == "rotated" && context.sessionID == "fixture-session")
+        precondition(AppleVerificationSession.from(HTTPURLResponse(url:origin,statusCode:406,httpVersion:nil,headerFields:[:])!) == nil)
+        precondition(!AppleVerificationSession.challenge(["failureType":"invalid_password"]))
+        do { _ = try context.request(code:"123"); fatalError("short code accepted") } catch is StoreFailure { }
         print("Direct Store protocol fixtures passed: redirect boundaries, exact plist payload, header casing, token-only account, HTTP 403, 2FA, SINF paths, CDN hosts")
     }
 }

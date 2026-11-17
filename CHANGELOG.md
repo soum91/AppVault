@@ -1,3 +1,17 @@
+# 0.4.3 (10) - trusted-device verification
+
+AppVault 0.4.3 (10): trusted-device verification and HTTP 406 handling
+
+- Replaces the XML-only Accept header with */* on Store requests so login can negotiate Apple's JSON, plist and challenge responses. The prior client's header was overly restrictive; this is a compatibility fix, not proof that it caused every 406.
+- Requests createSession in the signed login payload. Decodes structured response fields before classifying HTTP failures, preserving verification and Store-device challenges carried with non-2xx replies.
+- Recognizes Apple-issued X-Apple-ID-Session-Id/scnt context and explicit two-factor challenges. A bare HTTP 406 or an explicit credential rejection is not treated as proof that device approval is available.
+- With a valid verification session, requests trusted-device approval through Apple's idmsa endpoint, reveals the code field, and provides Request Approval and Cancel Verification actions. Code verification uses the same session, tracks rotated session headers/cookies, then resumes signed Store login. Legacy code-only continuation remains available when Apple does not provide a session for sending notifications.
+- Keeps verification session identifiers ephemeral and excludes passwords, codes, session IDs and scnt from reports and account serialization. Approval success is shown only when Apple accepts the request; it does not claim that a device displayed a prompt.
+- Adds redacted response diagnostics with stage, HTTP status, payload size/format and challenge/session presence so a failure can be located without exposing account data.
+
+Validation: protocol fixtures cover HTTP 406 JSON challenge parsing, rejection without session headers, explicit bad credentials, trusted-device request methods/body/headers and rotated scnt. Existing Store-proof/runtime gates and iOS compilation remain mandatory. The live Store probe uses invented credentials and cannot exercise trusted-device delivery. Real-account approval, 2FA, login, IPA download and exports remain unverified on a physical device.
+
+
 # Changelog
 
 ## [v0.4.2] - 2026-11-17

@@ -39,10 +39,14 @@ enum StoreProtocol {
         return url
     }
     static func loginBody(email: String, password: String, code: String, guid: String) throws -> Data {
-        let body = ["appleId": email, "attempt": code.isEmpty ? "1" : "2", "guid": guid, "password": password + code, "rmp": "0", "why": "signIn"]
+        let body = ["appleId": email, "attempt": code.isEmpty ? "1" : "2", "createSession": "true", "guid": guid, "password": password + code, "rmp": "0", "why": "signIn"]
         return try plist(body)
     }
     static func plist(_ value: Any) throws -> Data { try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0) }
+    static func responseFields(_ data: Data) -> [String: Any]? {
+        if let value = try? ApplePropertyList.dictionary(data) { return value }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
     static func dictionary(_ data: Data, status: Int) throws -> [String: Any] {
         if status == 403 { throw failure("http_403", "Apple rejected this Store request (HTTP 403). Open Settings > Backend Report for the installed version and failure code.") }
         if status == 429 { throw failure("http_429", "Apple rate-limited the request. Wait before trying again.") }

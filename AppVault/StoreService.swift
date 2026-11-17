@@ -47,6 +47,9 @@ enum VaultKeychain {
     @Published var status = "Ready"
     @Published var error: String?
     @Published var needsCode = false
+    @Published var canRequestApproval = false
+    @Published var verificationNotice = ""
+    private var backendTrace = "No Store response recorded."
     @Published var signedIn = false
     @Published var downloads: [URL] = []
     @Published var exported: URL?
@@ -58,7 +61,7 @@ enum VaultKeychain {
     var report: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
-        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nBackend: local WebKit SAP + Store AMD attestation; native Apple HTTPS\nJIT/emulator: none\nStage: \(status)\nLast failure: \(lastFailure)\nPhysical-device authentication and exports: unverified"
+        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nBackend: local WebKit SAP + Store AMD attestation; native Apple HTTPS\nJIT/emulator: none\nStage: \(status)\nLast failure: \(lastFailure)\n\(backendTrace)\nPhysical-device authentication and exports: unverified"
     }
     init() {
         do {
@@ -88,6 +91,12 @@ enum VaultKeychain {
             try await client.login(email: email, password: password, code: code)
         }
     }
+    func requestApproval() {
+        run("Requesting approval on trusted devices") { client in
+            try await client.requestTrustedDeviceApproval()
+            self.verificationNotice = "Apple accepted the notification request. Check your trusted devices and enter the displayed code."
+        }
+    }
     func search() {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return }
@@ -115,7 +124,7 @@ enum VaultKeychain {
             self.email = ""; self.password = ""; self.code = ""; self.signedIn = false; self.needsCode = false
         }
     }
-    func cancel() { operation?.cancel(); password = ""; code = ""; needsCode = false; status = "Cancellation requested" }
+    func cancel() { operation?.cancel(); Task { await client?.clearVerification() }; canRequestApproval = false; verificationNotice = ""; password = ""; code = ""; needsCode = false; status = "Cancellation requested" }
     private func run(_ phase: String, work: @escaping @MainActor (DirectAppleStore) async throws -> Void) {
         guard !busy else { return }
         guard let client else { error = "Secure storage is unavailable. Resolve the Keychain error before signing in."; return }
@@ -130,9 +139,17 @@ enum VaultKeychain {
                 try Task.checkCancellation()
                 let state = await client.snapshot()
                 try VaultKeychain.write(JSONEncoder().encode(state), account: "direct-state")
-                signedIn = state.account != nil; needsCode = false; status = "Completed"
+                signedIn = state.account != nil; if signedIn { needsCode = false; canRequestApproval = false; verificationNotice = "" }; status = "Completed"
+                backendTrace = await client.diagnostics()
             } catch {
-                if let failure = error as? StoreFailure, failure.code == "two_factor" { needsCode = true }
+                if let failure = error as? StoreFailure, failure.code == "two_factor" {
+                    needsCode = true; verificationNotice = failure.message
+                    canRequestApproval = await client.verificationAvailable()
+                    backendTrace = await client.diagnostics()
+                    status = "Waiting for verification"
+                    return
+                }
+                backendTrace = await client.diagnostics()
                 // Persist challenge cookies without saving a password or code.
                 if let state = try? JSONEncoder().encode(await client.snapshot()) {
                     do { try VaultKeychain.write(state, account: "direct-state") } catch { fail(error); return }
