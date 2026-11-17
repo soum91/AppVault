@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.4.2] - 2026-11-17
+
+## Verified changes since v0.4.1
+
+- Retain Store routing across verification and test initial versus code-submission attempts ([`ce0fc0ea`](https://github.com/soum91/AppVault/commit/ce0fc0eafeb728d2a579ad9f988fce1c2690581d); `AppVault/DirectAppleStore.swift`, `AppVault/StoreProtocol.swift`, `Tests/StoreProtocol/main.swift`)
+- Add local Store AMD provisioning and kbsync using pinned no-user-JIT WebKit runtime ([`8b93c2aa`](https://github.com/soum91/AppVault/commit/8b93c2aae4d11d5b5dc478fd3d3fd604e333711c); `.github/workflows/ios-build.yml`, `AppVault/Attestation/ApplePropertyList.swift`, `AppVault/Attestation/LocalSAPSigner.swift`, and 15 more)
+- Replace unsigned login with native SAP-signed ApplePackage Authenticator and retained 2FA session ([`ceb1ea49`](https://github.com/soum91/AppVault/commit/ceb1ea498003b51607375468f6d48ea1f199d018); `.github/workflows/ios-build.yml`, `AppVault/ApplePackage-LICENSE.txt`, `AppVault/BackupHomeView.swift`, and 7 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.4.1...v0.4.2)
+
 ## [v0.4.1] - 2026-11-17
 
 ## Verified changes since v0.3.1
