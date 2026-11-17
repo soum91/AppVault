@@ -1,3 +1,7 @@
+## Stock iOS helper workflow (0.6.0)
+
+Prepare a per-app helper in **IPAs > Decrypt on Stock iOS**, sign/install with payload-preserving EmberSign, then open the helper to export. Requires the matching device App Store account/license and Developer Mode. Physical-device signing and decryption remain unverified. See [STOCK_DECRYPTION.md](STOCK_DECRYPTION.md).
+
 ## Jailbreak decryption export (0.5.0)
 
 The separate rootless DEB adds installed-app decryption and IPA export. The ordinary sideloaded IPA keeps downloading encrypted App Store packages. Device decryption compatibility is unverified. See [DECRYPTION.md](DECRYPTION.md) for installation, implementation and limits.

@@ -40,7 +40,26 @@ jobs:
         env:
           APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
         run: node scripts/store-runtime-probe.cjs
-      - run: xcodegen generate
+      - name: Test stock helper preparation and integrity
+        run: |
+          mkdir -p /tmp/appvault-helper-tests/Sources/HelperPreparation
+          cp -R Tests/HelperPreparation/. /tmp/appvault-helper-tests/
+          cp AppVault/Decryption/HelperManifest.swift AppVault/Decryption/HelperPreparation.swift /tmp/appvault-helper-tests/Sources/HelperPreparation/
+          swift test --package-path /tmp/appvault-helper-tests
+      - name: Generate helper and app projects
+        run: |
+          mkdir -p Generated
+          python3 -c 'import zipfile; zipfile.ZipFile("Generated/DecryptHelper.zip", "w").close()'
+          xcodegen generate
+      - name: Build stock decryption helper template
+        run: |
+          xcodebuild -project AppVault.xcodeproj -scheme AppVaultDecrypt -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          mkdir -p helper-template/Payload
+          cp -R build/Build/Products/Release-iphoneos/AppVaultDecrypt.app helper-template/Payload/
+          ldid -SDecryptHelper/Helper.entitlements helper-template/Payload/AppVaultDecrypt.app/AppVaultDecrypt
+          cp DecryptHelper/Helper.entitlements helper-template/Payload/AppVaultDecrypt.app/archived-expanded-entitlements.xcent
+          rm Generated/DecryptHelper.zip
+          (cd helper-template && zip -qry ../Generated/DecryptHelper.zip Payload)
       - name: Build device app
         run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
       - name: Package IPA with entitlement template
@@ -49,7 +68,7 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/AppVault.app Payload/
           ldid -SAppVault/AppVault.entitlements Payload/AppVault.app/AppVault
           cp AppVault/AppVault.entitlements Payload/AppVault.app/archived-expanded-entitlements.xcent
-          zip -qry AppVault-0.5.0.ipa Payload
+          zip -qry AppVault-0.6.0.ipa Payload
       - name: Package privileged rootless jailbreak app
         run: |
           mkdir -p rootless/var/jb/Applications rootless/DEBIAN
@@ -58,20 +77,20 @@ jobs:
           chmod 755 rootless/DEBIAN/postinst rootless/DEBIAN/postrm
           ldid -Spackaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVault.app/AppVault
           cp packaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVault.app/archived-expanded-entitlements.xcent
-          dpkg-deb --root-owner-group -Zgzip --build rootless AppVault-0.5.0-rootless.deb
-          dpkg-deb --info AppVault-0.5.0-rootless.deb
+          dpkg-deb --root-owner-group -Zgzip --build rootless AppVault-0.6.0-rootless.deb
+          dpkg-deb --info AppVault-0.6.0-rootless.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-0.5.0-ipa
+          name: AppVault-0.6.0-ipa
           path: |
-            AppVault-0.5.0.ipa
-            AppVault-0.5.0-rootless.deb
+            AppVault-0.6.0.ipa
+            AppVault-0.6.0-rootless.deb
       - name: Publish experimental native client
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.5.0 >/dev/null 2>&1; then
-            gh release create v0.5.0 AppVault-0.5.0.ipa AppVault-0.5.0-rootless.deb --target "$GITHUB_SHA" --title "AppVault 0.5.0 (12) - jailbreak decryption export" --prerelease --notes-file RELEASE_NOTES.md
+          if ! gh release view v0.6.0 >/dev/null 2>&1; then
+            gh release create v0.6.0 AppVault-0.6.0.ipa AppVault-0.6.0-rootless.deb --target "$GITHUB_SHA" --title "AppVault 0.6.0 (13) - stock helper and jailbreak decryption" --prerelease --notes-file RELEASE_NOTES.md
           fi
       - name: Refresh FlareStore source
         env:
@@ -84,14 +103,14 @@ jobs:
           latest=json.loads(subprocess.check_output(['gh','api','repos/'+repo+'/contents/repo.json']))
           data=json.loads(base64.b64decode(latest['content']))
           app=next(a for a in data['apps'] if a.get('bundleIdentifier')=='com.soum91.appvault')
-          description='Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified.'
-          url='https://github.com/'+repo+'/releases/download/v0.5.0/AppVault-0.5.0.ipa'
+          description='Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.'
+          url='https://github.com/'+repo+'/releases/download/v0.6.0/AppVault-0.6.0.ipa'
           date=datetime.now(timezone.utc).strftime('%Y-%m-%d')
-          app['subtitle']='IPA downloads and jailbreak decryption'
-          app.update(version='0.5.0',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.5.0.ipa'),localizedDescription=description)
-          app['versions']=[{'version':'0.5.0','buildVersion':'12','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
+          app['subtitle']='IPA downloads and stock decryption helpers'
+          app.update(version='0.6.0',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.6.0.ipa'),localizedDescription=description)
+          app['versions']=[{'version':'0.6.0','buildVersion':'13','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
           data['description']=description
-          payload={'message':'Update FlareStore source for native AppVault 0.5.0 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          payload={'message':'Update FlareStore source for native AppVault 0.6.0 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
           open('feed-request.json','w').write(json.dumps(payload))
           subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
           PY

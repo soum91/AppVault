@@ -19,13 +19,15 @@ targets:
           NSAllowsLocalNetworking: true
     sources:
       - path: AppVault
+      - path: Generated/DecryptHelper.zip
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.soum91.appvault
         PRODUCT_NAME: AppVault
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: 0.5.0
-        CURRENT_PROJECT_VERSION: 12
+        MARKETING_VERSION: 0.6.0
+        CURRENT_PROJECT_VERSION: 13
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: AppVault
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
@@ -39,6 +41,34 @@ targets:
         INFOPLIST_KEY_UIFileSharingEnabled: YES
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
 
+    dependencies:
+      - package: ZIPFoundation
+  AppVaultDecrypt:
+    type: application
+    platform: iOS
+    sources:
+      - path: DecryptHelper
+      - path: AppVault/Decryption/MachODecrypt.c
+      - path: AppVault/Decryption/MachODecrypt.h
+      - path: AppVault/Decryption/IPAExportEngine.swift
+      - path: AppVault/Decryption/HelperManifest.swift
+      - path: AppVault/DiagnosticReport.swift
+      - path: AppVault/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.soum91.appvault.decrypthelper
+        PRODUCT_NAME: AppVaultDecrypt
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: 0.6.0
+        CURRENT_PROJECT_VERSION: 13
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: AppVault Decrypt
+        SWIFT_OBJC_BRIDGING_HEADER: DecryptHelper/HelperBridge.h
+        CODE_SIGN_ENTITLEMENTS: DecryptHelper/Helper.entitlements
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIFileSharingEnabled: YES
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
     dependencies:
       - package: ZIPFoundation
 packages:

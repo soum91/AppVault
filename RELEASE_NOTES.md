@@ -1,7 +1,9 @@
-# AppVault 0.5.0 (12)
+# AppVault 0.6.0 (13)
 
-Adds **IPAs > Decrypt Installed Apps** and a separate rootless jailbreak DEB. Select an installed user app, copy its app bundle, decrypt supported encrypted arm64 Mach-O slices with the device's FairPlay service, verify all copied binaries, and package `Payload/<App>.app` as an IPA. Includes nested frameworks and extensions; any unsupported or failed binary aborts the export and reports its failure. Original installed apps and earlier exports remain untouched.
+Adds **IPAs > Decrypt on Stock iOS**. Choose a saved/imported licensed IPA to prepare a separate per-app helper. Sign/install that helper with payload-preserving EmberSign, open it, and attempt local decryption/export. The helper keeps the target as installed resources, checks every embedded file hash, then shares a completed IPA only after all supported encrypted Mach-O slices pass page-read and encryption-marker checks. Includes nested frameworks and app extensions; watchOS content is omitted.
 
-The normal IPA keeps its limited entitlements and saves encrypted Apple downloads. Use the jailbreak DEB on the jailbroken device containing the installed app and matching App Store license. This does not add arbitrary-file decryption on stock iOS. See DECRYPTION.md for implementation, limitations and research attribution.
+Signing compatibility: requires the EmberSign AppVault-helper preservation update. Older EmberSign and FlareStore are not claimed compatible. The helper has its own identifier and ordinary entitlements. Requires matching device App Store account/license, development signing, Developer Mode, and a new helper installation for each target. Prepared helpers are not decrypted output.
 
-Validation: C parser fixtures and installed-version preflight passed locally. CI runs parser/protocol/runtime checks and compiles/packages both assets. Actual decryption on a physical jailbroken device, entitlement acceptance and diagnostic Copy/Share/Save remain unverified. Exported apps still need suitable signing.
+Refactors jailbreak and helper exports onto one implementation and shares the diagnostic component. Adds host preparation fixtures for resource integrity, license replication, tampering, missing licenses and path traversal. Keeps the rootless DEB export and App Store download/login flows.
+
+The public FairPlayed research reports stock iOS 27.0.1 support; AppVault's adaptation is original code, with no FairPlayed source vendored. Physical-device helper signing, actual decryption, and diagnostic Copy/Share/Save remain unverified. Build/fixture success does not establish successful device decryption. See STOCK_DECRYPTION.md for instructions and limits.

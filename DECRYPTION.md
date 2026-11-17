@@ -1,3 +1,5 @@
+For the separate stock iOS embedded-helper workflow, see [STOCK_DECRYPTION.md](STOCK_DECRYPTION.md). The restrictions below concern the installed-app jailbreak backend.
+
 # Decrypted IPA export
 
 Version 0.5.0 adds a separate installed-app export backend. The App Store download backend continues to save the original encrypted package.

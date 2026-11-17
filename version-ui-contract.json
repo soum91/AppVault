@@ -8,6 +8,14 @@
       "project": "project.yml",
       "versionKey": "CFBundleShortVersionString",
       "buildKey": "CFBundleVersion"
+    },
+    {
+      "platform": "ios",
+      "target": "AppVaultDecrypt",
+      "settingsView": "DecryptHelper/HelperApp.swift",
+      "project": "project.yml",
+      "versionKey": "CFBundleShortVersionString",
+      "buildKey": "CFBundleVersion"
     }
   ]
 }
