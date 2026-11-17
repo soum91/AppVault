@@ -1,12 +1,13 @@
-# Changelog
+# 0.4.4 (11) - account-bound verification
 
-## [v0.4.3] - 2026-11-17
+AppVault 0.4.4 (11): account-bound verification sessions
 
-## Verified changes since v0.4.2
+- Clears a pending trusted-device verification context when signing in with a different account, preventing reuse of the preceding account's approval session.
+- Corrects diagnostics to identify the local WebKit/WASM authentication runtime and distinguish it from user-enabled JIT, which is not required.
+- Retains 0.4.3's broader Accept header, structured challenge parsing before HTTP-error rejection, session creation, trusted-device approval requests, code verification and redacted response traces. A bare HTTP 406 is not treated as evidence of two-factor authentication.
 
-- Handle Apple verification sessions before HTTP errors and request trusted-device approval ([`acc5667c`](https://github.com/soum91/AppVault/commit/acc5667ccf9e57192bd653bcb6875c8b1c0ee39a); `.github/workflows/ios-build.yml`, `AppVault/AppleVerification.swift`, `AppVault/BackupHomeView.swift`, and 9 more)
+Validation: the verification-session fixtures, runtime integrity/smoke checks, live Store-proof acceptance and iOS compilation remain mandatory. 0.4.3 passed those checks before this follow-up. Real-account notification delivery, code verification, login, IPA download and exports remain unverified on a physical device. A notification request accepted by Apple does not prove that a trusted device displayed it.
 
-[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.4.2...v0.4.3)
 
 # 0.4.3 (10) - trusted-device verification
 

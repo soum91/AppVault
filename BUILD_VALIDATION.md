@@ -1,4 +1,4 @@
-# AppVault 0.4.3 (10) validation status
+# AppVault 0.4.4 (11) validation status
 
 The reported device failure was HTTP 406, with no response headers/body supplied. Its precise cause is not established. Source inspection found a restrictive XML-only Accept header, status-first rejection of structured challenge bodies, and no trusted-device prompt request path. This version addresses those gaps without treating every 406 as 2FA.
 

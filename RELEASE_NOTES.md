@@ -1,10 +1,7 @@
-AppVault 0.4.3 (10): trusted-device verification and HTTP 406 handling
+AppVault 0.4.4 (11): account-bound verification sessions
 
-- Replaces the XML-only Accept header with */* on Store requests so login can negotiate Apple's JSON, plist and challenge responses. The prior client's header was overly restrictive; this is a compatibility fix, not proof that it caused every 406.
-- Requests createSession in the signed login payload. Decodes structured response fields before classifying HTTP failures, preserving verification and Store-device challenges carried with non-2xx replies.
-- Recognizes Apple-issued X-Apple-ID-Session-Id/scnt context and explicit two-factor challenges. A bare HTTP 406 or an explicit credential rejection is not treated as proof that device approval is available.
-- With a valid verification session, requests trusted-device approval through Apple's idmsa endpoint, reveals the code field, and provides Request Approval and Cancel Verification actions. Code verification uses the same session, tracks rotated session headers/cookies, then resumes signed Store login. Legacy code-only continuation remains available when Apple does not provide a session for sending notifications.
-- Keeps verification session identifiers ephemeral and excludes passwords, codes, session IDs and scnt from reports and account serialization. Approval success is shown only when Apple accepts the request; it does not claim that a device displayed a prompt.
-- Adds redacted response diagnostics with stage, HTTP status, payload size/format and challenge/session presence so a failure can be located without exposing account data.
+- Clears a pending trusted-device verification context when signing in with a different account, preventing reuse of the preceding account's approval session.
+- Corrects diagnostics to identify the local WebKit/WASM authentication runtime and distinguish it from user-enabled JIT, which is not required.
+- Retains 0.4.3's broader Accept header, structured challenge parsing before HTTP-error rejection, session creation, trusted-device approval requests, code verification and redacted response traces. A bare HTTP 406 is not treated as evidence of two-factor authentication.
 
-Validation: protocol fixtures cover HTTP 406 JSON challenge parsing, rejection without session headers, explicit bad credentials, trusted-device request methods/body/headers and rotated scnt. Existing Store-proof/runtime gates and iOS compilation remain mandatory. The live Store probe uses invented credentials and cannot exercise trusted-device delivery. Real-account approval, 2FA, login, IPA download and exports remain unverified on a physical device.
+Validation: the verification-session fixtures, runtime integrity/smoke checks, live Store-proof acceptance and iOS compilation remain mandatory. 0.4.3 passed those checks before this follow-up. Real-account notification delivery, code verification, login, IPA download and exports remain unverified on a physical device. A notification request accepted by Apple does not prove that a trusted device displayed it.

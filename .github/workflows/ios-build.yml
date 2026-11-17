@@ -47,17 +47,17 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/AppVault.app Payload/
           ldid -SAppVault/AppVault.entitlements Payload/AppVault.app/AppVault
           cp AppVault/AppVault.entitlements Payload/AppVault.app/archived-expanded-entitlements.xcent
-          zip -qry AppVault-0.4.3.ipa Payload
+          zip -qry AppVault-0.4.4.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-0.4.3-ipa
-          path: AppVault-0.4.3.ipa
+          name: AppVault-0.4.4-ipa
+          path: AppVault-0.4.4.ipa
       - name: Publish experimental native client
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.4.3 >/dev/null 2>&1; then
-            gh release create v0.4.3 AppVault-0.4.3.ipa --target "$GITHUB_SHA" --title "AppVault 0.4.3 (10) - native direct client" --prerelease --notes-file RELEASE_NOTES.md
+          if ! gh release view v0.4.4 >/dev/null 2>&1; then
+            gh release create v0.4.4 AppVault-0.4.4.ipa --target "$GITHUB_SHA" --title "AppVault 0.4.4 (11) - native direct client" --prerelease --notes-file RELEASE_NOTES.md
           fi
       - name: Refresh FlareStore source
         env:
@@ -71,12 +71,12 @@ jobs:
           data=json.loads(base64.b64decode(latest['content']))
           app=next(a for a in data['apps'] if a.get('bundleIdentifier')=='com.soum91.appvault')
           description='Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains.'
-          url='https://github.com/'+repo+'/releases/download/v0.4.3/AppVault-0.4.3.ipa'
+          url='https://github.com/'+repo+'/releases/download/v0.4.4/AppVault-0.4.4.ipa'
           date=datetime.now(timezone.utc).strftime('%Y-%m-%d')
-          app.update(version='0.4.3',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.4.3.ipa'),localizedDescription=description)
-          app['versions']=[{'version':'0.4.3','buildVersion':'10','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
+          app.update(version='0.4.4',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.4.4.ipa'),localizedDescription=description)
+          app['versions']=[{'version':'0.4.4','buildVersion':'11','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
           data['description']=description
-          payload={'message':'Update FlareStore source for native AppVault 0.4.3 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          payload={'message':'Update FlareStore source for native AppVault 0.4.4 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
           open('feed-request.json','w').write(json.dumps(payload))
           subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
           PY

@@ -24,8 +24,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.soum91.appvault
         PRODUCT_NAME: AppVault
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: 0.4.3
-        CURRENT_PROJECT_VERSION: 10
+        MARKETING_VERSION: 0.4.4
+        CURRENT_PROJECT_VERSION: 11
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: AppVault
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
