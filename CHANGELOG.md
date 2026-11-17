@@ -1,3 +1,18 @@
+# Changelog
+
+## [v0.4.1] - 2026-11-17
+
+## Verified changes since v0.3.1
+
+- Replace emulator with DLiPA-style native direct Apple Store login and IPA downloads ([`dd61ecfb`](https://github.com/soum91/AppVault/commit/dd61ecfbd84699258d0c109a4570edecd9ebb807); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/DirectAppleStore.swift`, and 16 more)
+- Persist cookies in secure session state and redact actionable backend errors ([`ce59f077`](https://github.com/soum91/AppVault/commit/ce59f077ce6ad3e18ffe91261b60fc4159e8dbb0); `AppVault/BackupHomeView.swift`, `AppVault/IPAToolService.swift`, `NativeIPATool/cookies.go`, and 3 more)
+- Integrate pinned ipatool backend with native IPA UI and explicit JIT capability gate ([`d15b12c8`](https://github.com/soum91/AppVault/commit/d15b12c8ae2ed90a615f67e456dfdf1985749386); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/IPAToolBridge.h`, and 10 more)
+- Remove third-party DLiPA catalog substitution ([`8ffaec28`](https://github.com/soum91/AppVault/commit/8ffaec28eb1d6e9a69cfde6788597827f4f16d6f); `.github/workflows/catalog-dlipa.yml`, `repo.json`, `scripts/catalog_dlipa.py`)
+- Preserve separately cataloged IPA tools when refreshing the AppVault listing ([`2b08375c`](https://github.com/soum91/AppVault/commit/2b08375c887ab27bddc2c0e5ed08de8e7cc7e1b7); `.github/workflows/ios-build.yml`)
+- Catalog official DLiPA IPA downloader with metadata verification ([`e5d601f9`](https://github.com/soum91/AppVault/commit/e5d601f9ce77ee7c5362dd62cd5fe6508213e55c); `.github/workflows/catalog-dlipa.yml`, `scripts/catalog_dlipa.py`)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.3.1...v0.4.1)
+
 # 0.4.1 (8) - direct native Store client
 
 AppVault 0.4.1 (8): native direct Apple Store client
