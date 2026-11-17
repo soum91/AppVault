@@ -1,3 +1,13 @@
+# Changelog
+
+## [v0.3.1] - 2026-11-17
+
+## Verified changes since v0.3.0
+
+- Fix app-data backup copying protected container metadata; add copy regression fixtures ([`bd6f8612`](https://github.com/soum91/AppVault/commit/bd6f8612f4e290acdae3679b7fce8b31e3d59281); `.github/workflows/ios-build.yml`, `AppVault/AppDataCopy.swift`, `AppVault/BackupService.swift`, and 3 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.3.0...v0.3.1)
+
 # AppVault 0.5.0 (12)
 
 Adds **IPAs > Decrypt Installed Apps** and a separate rootless jailbreak DEB. Select an installed user app, copy its app bundle, decrypt supported encrypted arm64 Mach-O slices with the device's FairPlay service, verify all copied binaries, and package `Payload/<App>.app` as an IPA. Includes nested frameworks and extensions; any unsupported or failed binary aborts the export and reports its failure. Original installed apps and earlier exports remain untouched.
