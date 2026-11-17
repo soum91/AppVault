@@ -83,8 +83,13 @@ jobs:
                   return None
           
           
-          def specific(subject):
+          def specific(subject, paths):
               s = re.sub(r"^(feat|fix|refactor|perf|build|ci|docs|chore|test)(\([^)]*\))?!?:\s*", "", subject.strip(), flags=re.I)
+              # File-by-file initial commits can be concrete despite having only
+              # two words. Require the exact named source file in the diff.
+              named = re.fullmatch(r"(?:Add|Create|Implement) (\S+\.(?:swift|m|mm|h|c|cpp|py|go|rs|kt|java))", s)
+              if named and named.group(1) in paths:
+                  return True
               if len(s) < 17 or len(s.split()) < 3:
                   return False
               if re.search(r"\[(skip ci|ci skip)\]", subject, flags=re.I):
@@ -98,7 +103,7 @@ jobs:
           
           
           def changed_paths(commit):
-              raw = git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+              raw = git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", commit)
               excluded = ("CHANGELOG.md", "AGENTS.md", "CLAUDE.md", ".github/workflows/release-changelog.yml")
               return [p for p in raw.splitlines() if p and p not in excluded]
           
@@ -141,8 +146,8 @@ jobs:
               range_expr = base + ".." + head if base else head
               log = git("log", "--format=%H%x09%s", range_expr)
               commits = [line.split("\t", 1) for line in log.splitlines() if "\t" in line]
-              real = [(sha, title, changed_paths(sha)) for sha, title in commits if specific(title)]
-              real = [(sha, title, paths) for sha, title, paths in real if paths]
+              candidates = [(sha, title, changed_paths(sha)) for sha, title in commits]
+              real = [(sha, title, paths) for sha, title, paths in candidates if paths and specific(title, paths)]
               body = release.get("body") or ""
               rebuild = not real and bool(re.search(r"(?im)^##?\s+Rebuild[- ]only\b", body))
               rebuild_details = [line.strip() for line in body.splitlines() if re.match(r"^\s*[-*]\s+.{35,}", line)]
