@@ -1,21 +1,25 @@
 # AppVault
 
-Native iOS UI for IPA package downloads using the MIT-licensed [majd/ipatool](https://github.com/majd/ipatool) backend. The 0.4.0 integration is experimental and built as a GitHub Actions artifact, with no automatic release/feed promotion.
+Native iOS app for account-authorized IPA downloads directly from Apple.
 
-## Runtime requirement
+Version 0.4.1 replaces the experimental ipatool/Unicorn backend from 0.4.0 with a native URLSession client following the Store protocol observed in DLiPA. No JIT, jailbreak, desktop companion, credential relay, Apple framework asset download or additional root certificate is required by the implementation.
 
-The pinned backend emulates Apple authentication components through Unicorn. Its upstream iOS build is explicitly for jailbroken devices. AppVault embeds the backend, but it still requires executable memory. On stock iOS, working JIT must be enabled for AppVault; a signing entitlement or worse_query does not grant this capability. AppVault checks the required writable-to-executable memory transition before collecting a password. Passing that check is necessary, but does not prove full runtime compatibility.
+## Authentication limitation
 
-Without JIT or a compatible jailbreak this backend cannot sign in or download. No desktop companion or private credential server is included. First use downloads and verifies the pinned Apple runtime assets through upstream code. Keep the app in the foreground. Cancellation is cooperative; some upstream authentication requests do not accept a context.
+DLiPA itself has current login failures. Reproducing its direct request format does not establish that Apple will accept it. Apple can reject unsigned Store authentication requests with HTTP 403; AppVault reports that explicitly. Physical-device sign-in, 2FA and real downloads remain unverified. A successful compile is not a verified login fix.
 
-## Packages and accounts
+## Features
 
-AppVault downloads account-authorized IPA packages from Apple. It does not extract installed app bundles, decrypt DRM, restore app data, or promise sideloadability. Obtain licenses through the App Store first. Tokens/provisioning are saved in device-only Keychain storage. Passwords are stripped from stored account records and only retained in memory while completing a verification-code challenge. No extra root CA is used.
+Search the public App Store, sign in using an Apple Account and a verification code when required, and request owned apps through volumeStoreDownloadProduct. An optional external version ID requests a specific build when Apple serves it. Obtain licenses through the App Store first; AppVault does not buy apps automatically. Saved files are validated IPA packages with supplied Apple SINF and metadata added, not app-data ZIP backups. Apple DRM remains and sideloadability is not guaranteed.
 
-## Build
+Session tokens and cookies are stored only in this app's device-only Keychain. Passwords and verification codes remain in memory for the login challenge and are cleared after completion/cancellation. Store redirects are limited and restricted to Apple HTTPS hosts; credential headers/cookies are not attached to the separate CDN session. No certificate trust bypass is implemented.
 
-Use macOS, Xcode, Go 1.26.5, XcodeGen, ldid and CMake. Run `scripts/build-ipatool.sh`, `python3 scripts/check_version_ui.py`, `xcodegen generate`, then the xcodebuild command in `.github/workflows/ios-build.yml`. The build pins ipatool at `b352566155a667d8aaeabaa7ecec4966080f92ab` and uses its integrity-checked Unicorn 2.1.4 build/patch. Libraries are linked statically into the app, not launched as a child process. Upstream's MIT license is bundled during build; Unicorn retains its upstream license obligations.
+## Build and tests
 
-## Validation status
+Use macOS, Xcode, XcodeGen and ldid. Run `python3 scripts/check_version_ui.py`, then the Swift protocol fixtures shown in `.github/workflows/ios-build.yml`. Generate the Xcode project with `xcodegen generate` and build the AppVault scheme for iphoneos. The workflow builds and publishes the IPA and updates `repo.json` only after successful checks.
 
-CI checks the version contract and password/credential-clearing fixtures, then compiles a device IPA. Physical-device login, JIT, actual downloads, file exports and installation remain unverified. Do not describe a successful build as a verified authentication fix. Earlier 0.3.x builds were app-data backup experiments and do not satisfy IPA download requirements.
+## Protocol evidence
+
+The request layout was checked against the official DLiPA 1.4 binary: Configurator/2.20 User-Agent, XML property-list login body, form-urlencoded content type, appleId/attempt/createSession/guid/password/rmp/why keys, live bag lookup and volumeStoreDownloadProduct request. No DLiPA executable or closed-source implementation is bundled. The direct client is first-party AppVault code. MIT-licensed majd/ipatool's published SINF layout was used as protocol reference; existing third-party source notices remain intact.
+
+Diagnostics provide verified Copy, native Share, Files text export and selectable text. Device verification of those paths remains pending.

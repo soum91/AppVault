@@ -2,19 +2,18 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct BackupHomeView: View {
-    @StateObject private var store = IPAToolService()
+    @StateObject private var store = StoreService()
     var body: some View {
         TabView {
             NavigationStack {
                 List {
-                    if !store.capable { capability }
-                    if !store.signedIn {
-                        Text("Sign in under Account to search and save App Store IPA packages.")
-                    } else {
+                    if !store.signedIn { Text("Search the App Store below. Sign in under Account to save IPA packages.").font(.footnote) }
+                    Group {
                         HStack {
                             TextField("Find an App Store app", text: $store.query).onSubmit { store.search() }
                             Button("Search") { store.search() }.disabled(store.busy)
                         }
+                        TextField("External version ID (optional)", text: $store.versionID).keyboardType(.numberPad)
                         ForEach(store.apps) { app in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(app.trackName ?? app.bundleId ?? "App").font(.headline)
@@ -35,20 +34,19 @@ struct BackupHomeView: View {
             }.tabItem { Label("IPAs", systemImage: "archivebox") }
             NavigationStack {
                 Form {
-                    capability
                     Section("Apple Account") {
                         if store.signedIn {
                             Text("Signed in")
                             Button("Sign Out", role: .destructive) { store.signOut() }.disabled(store.busy)
                         } else {
-                            TextField("Email or phone number", text: $store.email).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).disabled(!store.capable || store.busy)
-                            SecureField("Password", text: $store.password).textContentType(.password).disabled(!store.capable || store.busy)
+                            TextField("Email or phone number", text: $store.email).textInputAutocapitalization(.never).autocorrectionDisabled().textContentType(.username).disabled(store.busy)
+                            SecureField("Password", text: $store.password).textContentType(.password).disabled(store.busy)
                             if store.needsCode { TextField("Verification code", text: $store.code).keyboardType(.numberPad).textContentType(.oneTimeCode) }
-                            Button("Sign In") { store.signIn() }.disabled(store.busy || !store.capable)
+                            Button("Sign In") { store.signIn() }.disabled(store.busy)
                         }
                     }
                     Section {
-                        Text("Uses the open-source ipatool backend directly inside AppVault. Session tokens and provisioning state are stored in this app's Keychain. Your password is not saved after sign-in. No extra root certificate is required.").font(.footnote)
+                        Text("Uses native HTTPS requests directly to Apple, following the same Store protocol as DLiPA. No JIT, jailbreak, emulator, root certificate or credential relay is required. Session tokens and cookies stay in the device-only Keychain. Your password is not saved.").font(.footnote)
                         Text("Downloads account-authorized packages from Apple. Apple DRM remains; saving an IPA does not guarantee it can be installed through a sideloader.").font(.footnote)
                     }
                 }.navigationTitle("Account")
@@ -62,9 +60,9 @@ struct BackupHomeView: View {
                     }
                     Section("Diagnostics") { NavigationLink("Backend Report") { DiscoveryReport(text: store.report) } }
                     Section("Backend") {
-                        Text("ipatool · b352566155a6").textSelection(.enabled)
-                        Link("Source and license", destination: URL(string: "https://github.com/majd/ipatool")!)
-                        Text("Experimental iOS integration. Login and IPA downloads have not been verified on a physical device. Keep AppVault open while downloading. The initial authentication runtime download can take time.").font(.footnote)
+                        Text("Native Apple Store client · URLSession")
+                        Link("AppVault source", destination: URL(string: "https://github.com/soum91/AppVault")!)
+                        Text("Direct Apple login and IPA download implementation. Apple may reject unsigned authentication with HTTP 403; this build reports that explicitly. Keep AppVault open during downloads. Physical-device login and exports remain unverified.").font(.footnote)
                     }
                 }.navigationTitle("Settings")
             }.tabItem { Label("Settings", systemImage: "gearshape") }
@@ -81,16 +79,8 @@ struct BackupHomeView: View {
             if let url = store.exported { ShareSheet(url: url) }
         }
     }
-    private var capability: some View {
-        Section("ipatool Runtime") {
-            Label(store.capable ? "Executable memory available" : "JIT required", systemImage: store.capable ? "checkmark.circle" : "exclamationmark.triangle")
-            if !store.capable {
-                Text("iOS denied the executable memory needed by ipatool. Enable JIT for AppVault or use a compatible jailbreak. worse_query alone does not enable JIT.").font(.footnote)
-            }
-            Button("Check Again") { store.refreshCapability() }
-        }
-    }
 }
+
 private struct ShareSheet: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: [url], applicationActivities: nil) }

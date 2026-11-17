@@ -8,5 +8,3 @@ NSArray<NSDictionary *> * _Nonnull AVDiscoverApps(void (^ _Nonnull progress)(NSS
 void AVDiscoveryCancel(void);
 NSString * _Nonnull AVDiscoveryStatus(void);
 NSString * _Nonnull AVDiscoveryLog(void);
-
-#import "IPAToolBridge.h"
