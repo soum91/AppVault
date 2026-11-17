@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "AppVault and official IPA download tools",
-  "description": "Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.",
+  "description": "Native direct Apple Store IPA downloads. No JIT or jailbreak required. Experimental: Apple may reject unsigned login with HTTP 403; real-device login/download remains unverified. Apple DRM remains.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
@@ -11,24 +11,24 @@
       "bundleIdentifier": "com.soum91.appvault",
       "developerName": "soum91",
       "subtitle": "Back up selected IPAs and app data",
-      "localizedDescription": "Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.",
+      "localizedDescription": "Native direct Apple Store IPA downloads. No JIT or jailbreak required. Experimental: Apple may reject unsigned login with HTTP 403; real-device login/download remains unverified. Apple DRM remains.",
       "tintColor": "#4F46E5",
       "category": "utilities",
       "versions": [
         {
-          "version": "0.3.1",
-          "buildVersion": "6",
+          "version": "0.4.1",
+          "buildVersion": "8",
           "date": "2026-11-17",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.1/AppVault-0.3.1.ipa",
-          "size": 292781,
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.1/AppVault-0.4.1.ipa",
+          "size": 319554,
           "minOSVersion": "16.0",
-          "localizedDescription": "Exclude protected container metadata from app-data backup; copy Documents and Library with an exclusions manifest. Physical-device retest remains pending."
+          "localizedDescription": "Native direct Apple Store IPA downloads. No JIT or jailbreak required. Experimental: Apple may reject unsigned login with HTTP 403; real-device login/download remains unverified. Apple DRM remains."
         }
       ],
-      "version": "0.3.1",
+      "version": "0.4.1",
       "versionDate": "2026-11-17",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.1/AppVault-0.3.1.ipa",
-      "size": 292781,
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.1/AppVault-0.4.1.ipa",
+      "size": 319554,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
