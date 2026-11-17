@@ -54,7 +54,7 @@ enum StoreProtocol {
         if let xml = String(data: data, encoding: .utf8), let start = xml.range(of: "<plist"), let end = xml.range(of: "</plist>", range: start.lowerBound..<xml.endIndex), let body = xml[start.lowerBound..<end.upperBound].data(using: .utf8), let value = try? PropertyListSerialization.propertyList(from: body, options: [], format: nil) as? [String: Any] { return value }
         throw failure("invalid_response", "Apple returned an empty or unsupported response. No account or backup was saved.")
     }
-    static func loginResult(_ dict: [String: Any], response: HTTPURLResponse, email: String, suppliedCode: Bool) throws -> StoreAccount {
+    static func loginResult(_ dict: [String: Any], response: HTTPURLResponse, email: String, suppliedCode: Bool, fallbackStorefront: String? = nil, fallbackPod: String? = nil) throws -> StoreAccount {
         let message = dict["customerMessage"] as? String ?? ""
         let code = String(describing: dict["failureType"] ?? "")
         if !suppliedCode && (message == "MZFinance.BadLogin.Configurator_message" || (dict["m-allowed"] as? Bool) == true) {
@@ -66,9 +66,9 @@ enum StoreProtocol {
             let known: [String: String] = ["Your account is disabled.": "Apple reported that this account is disabled.", "Your password has changed.": "Apple reported expired credentials. Sign in again."]
             throw failure(code.allSatisfy(\.isNumber) && !code.isEmpty ? "apple_" + code : "login_rejected", known[message] ?? "Apple did not issue an App Store session. Check the credentials or account status. This build does not bypass Apple's authentication requirements.")
         }
-        let storefront = response.value(forHTTPHeaderField: "X-Set-Apple-Store-Front") ?? response.value(forHTTPHeaderField: "X-Apple-Store-Front") ?? ""
+        let storefront = response.value(forHTTPHeaderField: "X-Set-Apple-Store-Front") ?? response.value(forHTTPHeaderField: "X-Apple-Store-Front") ?? fallbackStorefront ?? ""
         guard !storefront.isEmpty else { throw failure("missing_storefront", "Apple issued an incomplete session with no storefront.") }
-        let pod = response.value(forHTTPHeaderField: "pod")
+        let pod = response.value(forHTTPHeaderField: "pod") ?? fallbackPod
         return StoreAccount(email: email, token: token, dsid: String(describing: rawID), storefront: storefront, pod: pod)
     }
     static func safeRelativePath(_ path: String) -> Bool {

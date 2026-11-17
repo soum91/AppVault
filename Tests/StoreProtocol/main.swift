@@ -9,10 +9,16 @@ import Foundation
         }
         let body = try StoreProtocol.loginBody(email: "fixture@example.invalid", password: "a&<\"'", code: "123456", guid: "001122334455")
         let plist = try PropertyListSerialization.propertyList(from: body, options: [], format: nil) as! [String: String]
-        precondition(plist["password"] == "a&<\"'123456" && plist["createSession"] == nil && plist["attempt"] == "1")
+        precondition(plist["password"] == "a&<\"'123456" && plist["createSession"] == nil && plist["attempt"] == "2")
+        let initialBody = try StoreProtocol.loginBody(email: "fixture@example.invalid", password: "fixture", code: "", guid: "001122334455")
+        let initial = try PropertyListSerialization.propertyList(from: initialBody, options: [], format: nil) as! [String: String]
+        precondition(initial["attempt"] == "1")
         let headers = HTTPURLResponse(url: origin, statusCode: 200, httpVersion: nil, headerFields: ["x-set-apple-store-front":"143455-1,29", "pod":"25"])!
         let account = try StoreProtocol.loginResult(["passwordToken":"fixture-token", "dsPersonId":12345], response: headers, email: "fixture@example.invalid", suppliedCode: false)
         precondition(account.dsid == "12345" && account.storefront == "143455-1,29")
+        let finalHeaders = HTTPURLResponse(url: origin, statusCode: 200, httpVersion: nil, headerFields: [:])!
+        let continued = try StoreProtocol.loginResult(["passwordToken":"fixture-token", "dsPersonId":12345], response: finalHeaders, email: "fixture@example.invalid", suppliedCode: true, fallbackStorefront: account.storefront, fallbackPod: account.pod)
+        precondition(continued.storefront == "143455-1,29" && continued.pod == "25")
         let encoded = String(data: try JSONEncoder().encode(account), encoding: .utf8)!
         precondition(!encoded.contains("a&") && !encoded.contains("password"))
         do { _ = try StoreProtocol.dictionary(Data(), status: 403); fatalError("403 accepted") } catch let e as StoreFailure { precondition(e.code == "http_403") }

@@ -24,6 +24,8 @@ private final class CDNDelegate: NSObject, URLSessionTaskDelegate {
 }
 actor DirectAppleStore {
     private var state: DirectStoreState
+    private var routingStorefront: String?
+    private var routingPod: String?
     private let guid: String
     private let session: URLSession
     private let cdn: URLSession
@@ -83,6 +85,8 @@ actor DirectAppleStore {
             let (data, raw) = try await session.data(for: request)
             guard let response = raw as? HTTPURLResponse else { throw StoreProtocol.failure("non_http", "Apple returned a non-HTTP response.") }
             retainCookies(response, url: url)
+            if let storefront = response.value(forHTTPHeaderField: "X-Set-Apple-Store-Front") ?? response.value(forHTTPHeaderField: "X-Apple-Store-Front"), !storefront.isEmpty { routingStorefront = storefront }
+            if let pod = response.value(forHTTPHeaderField: "pod"), !pod.isEmpty { routingPod = pod }
             if [301,302,303,307,308].contains(response.statusCode) {
                 // Use Foundation's case-insensitive header lookup. Keep the POST
                 // body intact while resolving only validated Apple destinations.
@@ -126,6 +130,7 @@ actor DirectAppleStore {
         guard code.isEmpty || (code.count == 6 && code.allSatisfy({ $0.isASCII && $0.isNumber })) else {
             throw StoreProtocol.failure("invalid_code", "Enter a six-digit verification code.")
         }
+        if code.isEmpty { routingStorefront = nil; routingPod = nil }
         let (bagData, bagResponse) = try await request(URL(string: "https://init.itunes.apple.com/bag.xml?guid=\(guid)&ix=6")!)
         let bag = try StoreProtocol.dictionary(bagData, status: bagResponse.statusCode)
         let urls = bag["urlBag"] as? [String: Any] ?? bag
@@ -141,7 +146,7 @@ actor DirectAppleStore {
         let signature = try await signer.sign(body, guid: guid, useCache: true, cacheSignature: false)
         let (data, response) = try await attested(components.url!, body: body, signature: signature)
         let fields = try StoreProtocol.dictionary(data, status: response.statusCode)
-        state.account = try StoreProtocol.loginResult(fields, response: response, email: email, suppliedCode: !code.isEmpty)
+        state.account = try StoreProtocol.loginResult(fields, response: response, email: email, suppliedCode: !code.isEmpty, fallbackStorefront: routingStorefront, fallbackPod: routingPod)
     }
     func search(_ term: String) async throws -> [StoreApp] {
         var components = URLComponents(string: "https://itunes.apple.com/search")!
