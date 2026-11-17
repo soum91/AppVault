@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "AppVault and official IPA download tools",
-  "description": "Native direct Apple Store IPA downloads. No JIT or jailbreak required. Experimental: Apple may reject unsigned login with HTTP 403; real-device login/download remains unverified. Apple DRM remains.",
+  "description": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
@@ -11,24 +11,24 @@
       "bundleIdentifier": "com.soum91.appvault",
       "developerName": "soum91",
       "subtitle": "Back up selected IPAs and app data",
-      "localizedDescription": "Native direct Apple Store IPA downloads. No JIT or jailbreak required. Experimental: Apple may reject unsigned login with HTTP 403; real-device login/download remains unverified. Apple DRM remains.",
+      "localizedDescription": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains.",
       "tintColor": "#4F46E5",
       "category": "utilities",
       "versions": [
         {
-          "version": "0.4.1",
-          "buildVersion": "8",
+          "version": "0.4.2",
+          "buildVersion": "9",
           "date": "2026-11-17",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.1/AppVault-0.4.1.ipa",
-          "size": 319554,
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.2/AppVault-0.4.2.ipa",
+          "size": 491121,
           "minOSVersion": "16.0",
-          "localizedDescription": "Native direct Apple Store IPA downloads. No JIT or jailbreak required. Experimental: Apple may reject unsigned login with HTTP 403; real-device login/download remains unverified. Apple DRM remains."
+          "localizedDescription": "Native SAP-signed Apple Store login and IPA downloads, with retained 2FA sessions. No JIT or jailbreak required. Signature acceptance is checked against Apple in CI; real-account device login/download remains unverified. Apple DRM remains."
         }
       ],
-      "version": "0.4.1",
+      "version": "0.4.2",
       "versionDate": "2026-11-17",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.1/AppVault-0.4.1.ipa",
-      "size": 319554,
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.4.2/AppVault-0.4.2.ipa",
+      "size": 491121,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
