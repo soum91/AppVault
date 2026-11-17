@@ -127,12 +127,30 @@ final class BackupService: ObservableObject {
             defer { try? fm.removeItem(at: staging) }
             let folder = isApp ? staging.appendingPathComponent("Payload") : staging.appendingPathComponent("Backup")
             try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            let copiedRoot = folder.appendingPathComponent(sourceURL.lastPathComponent)
             try self.withAccess(source) {
-                try fm.copyItem(at: sourceURL, to: folder.appendingPathComponent(sourceURL.lastPathComponent))
+                if isApp {
+                    try fm.copyItem(at: sourceURL, to: copiedRoot)
+                } else {
+                    let canonical = sourceURL.standardizedFileURL.path.replacingOccurrences(of: "/private/var/", with: "/var/")
+                    let parent = URL(fileURLWithPath: canonical).deletingLastPathComponent().path
+                    let result = try AppDataCopy.copy(source: sourceURL, to: copiedRoot,
+                        applicationContainer: parent == "/var/mobile/Containers/Data/Application")
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    try encoder.encode(result).write(to: staging.appendingPathComponent("backup-manifest.json"))
+                }
             }
             let destination = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("\(sourceURL.deletingPathExtension().lastPathComponent)-\(Int(Date().timeIntervalSince1970)).\(isApp ? "ipa" : "zip")")
-            try fm.zipItem(at: staging, to: destination, shouldKeepParent: false)
+            do {
+                try fm.zipItem(at: staging, to: destination, shouldKeepParent: false)
+                // ZIPFoundation must be able to read its own central directory before export.
+                _ = try Archive(url: destination, accessMode: .read)
+            } catch {
+                try? fm.removeItem(at: destination)
+                throw error
+            }
             guard fm.fileExists(atPath: destination.path) else { throw VaultFailure(message: "No archive was produced.") }
             DispatchQueue.main.async { self.exported = destination }
         }

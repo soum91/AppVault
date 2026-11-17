@@ -1,11 +1,9 @@
-# AppVault 0.3.0 (5)
+# AppVault 0.3.1 (6)
 
-- Replace automatic ascending full-volume container scans with a 20-second descending search for the LaunchServices database. Resume unsuccessful searches from a saved cursor.
-- Read app names and data paths using the GPL-3.0 WQFiles database parser; reuse the remembered database location.
-- Check for a usable signed App Group and validate fsgetpath against an app-owned probe before searching.
-- Show checked-ID counts and elapsed time, and support cancellation.
-- Add selectable discovery diagnostics with verified clipboard copy, native share and Files export.
-- Remove the App Bundle shortcut and explicitly document that installed IPA extraction on iOS 27.0.1 is unsupported by this access method.
+- Fix the app-data backup failure on Apple's protected .com.apple.mobile_container_manager.metadata.plist by copying Documents and Library rather than the whole container.
+- Exclude Library/Caches, tmp and container-management files; record exclusions and copied file/byte counts in backup-manifest.json.
+- Continue to abort on unreadable user data or symbolic links; remove incomplete ZIP output on archive failure.
+- Add host regression fixtures covering protected metadata, preserved data, exclusions, unreadable user files and symbolic links.
 
-Evidence: changes to AppVault/Discovery, BackupService.swift and BackupHomeView.swift in this release commit.
-Limitations: compilation and archive metadata can be verified by CI. App-container discovery, backup, clipboard, Share and Files export have not been tested on a signed physical device by the maintainer in this session. No claim of working installed-IPA extraction is made.
+Evidence: AppVault/AppDataCopy.swift, BackupService.swift and Tests/main.swift in this release.
+Validation: host fixtures and device compilation run in GitHub Actions before publication. The reported physical-device metadata failure has not been retested on the user's device. This remains app-data ZIP backup; installed IPA extraction on iOS 27.0.1 remains unsupported.

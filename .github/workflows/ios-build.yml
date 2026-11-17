@@ -15,6 +15,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Block packaging on installed-version contract failures
         run: python3 scripts/check_version_ui.py
+      - name: Verify data-copy regression fixtures
+        run: |
+          swiftc AppVault/AppDataCopy.swift Tests/main.swift -o /tmp/appvault-copy-tests
+          /tmp/appvault-copy-tests
       - name: Install build tools
         run: brew install xcodegen ldid
       - run: xcodegen generate
@@ -26,17 +30,17 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/AppVault.app Payload/
           ldid -SAppVault/AppVault.entitlements Payload/AppVault.app/AppVault
           cp AppVault/AppVault.entitlements Payload/AppVault.app/archived-expanded-entitlements.xcent
-          zip -qry AppVault-0.3.0.ipa Payload
+          zip -qry AppVault-0.3.1.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-0.3.0-ipa
-          path: AppVault-0.3.0.ipa
+          name: AppVault-0.3.1-ipa
+          path: AppVault-0.3.1.ipa
       - name: Publish prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.3.0 >/dev/null 2>&1; then
-            gh release create v0.3.0 AppVault-0.3.0.ipa --target "$GITHUB_SHA" --title "AppVault 0.3.0 (5)" --prerelease --notes-file RELEASE_NOTES.md
+          if ! gh release view v0.3.1 >/dev/null 2>&1; then
+            gh release create v0.3.1 AppVault-0.3.1.ipa --target "$GITHUB_SHA" --title "AppVault 0.3.1 (6)" --prerelease --notes-file RELEASE_NOTES.md
           fi
       - name: Refresh FlareStore source
         env:
@@ -52,15 +56,15 @@ jobs:
           app['localizedDescription']='Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.'
           app['iconURL']='https://raw.githubusercontent.com/'+repo+'/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png'
           data['iconURL']=app['iconURL']
-          app['version']='0.3.0'
+          app['version']='0.3.1'
           app['versionDate']=datetime.now(timezone.utc).strftime('%Y-%m-%d')
-          url='https://github.com/'+repo+'/releases/download/v0.3.0/AppVault-0.3.0.ipa'
+          url='https://github.com/'+repo+'/releases/download/v0.3.1/AppVault-0.3.1.ipa'
           app['downloadURL']=url
-          app['size']=os.path.getsize('AppVault-0.3.0.ipa')
-          app['versions']=[{'version':'0.3.0','buildVersion':'5','date':app['versionDate'],'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':'Bounded database search, signed-group preflight and discovery report. Physical-device access remains unverified. No installed IPA extraction on iOS 27.0.1.'}]
+          app['size']=os.path.getsize('AppVault-0.3.1.ipa')
+          app['versions']=[{'version':'0.3.1','buildVersion':'6','date':app['versionDate'],'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':'Exclude protected container metadata from app-data backup; copy Documents and Library with an exclusions manifest. Physical-device retest remains pending.'}]
           data['description']=app['localizedDescription']
           current=json.loads(subprocess.check_output(['gh','api','repos/'+repo+'/contents/repo.json']))
-          payload={'message':'Update FlareStore source for AppVault 0.3.0 [skip ci]','sha':current['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          payload={'message':'Update FlareStore source for AppVault 0.3.1 [skip ci]','sha':current['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
           open('feed-request.json','w').write(json.dumps(payload))
           subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
           PY
