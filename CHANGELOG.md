@@ -1,3 +1,17 @@
+# Changelog
+
+## [v0.1.0] - 2026-11-12
+
+## Verified changes since project start
+
+- Add AppVault/WorseQueryBridge.h ([`7abcf239`](https://github.com/soum91/AppVault/commit/7abcf2395c91bb4686a5672a1a965ac2ef1571ce); `AppVault/WorseQueryBridge.h`)
+- Add AppVault/BackupService.swift ([`159da0db`](https://github.com/soum91/AppVault/commit/159da0dbcffc2c44be1a63634c9b8626fbb777c8); `AppVault/BackupService.swift`)
+- Add AppVault/BackupHomeView.swift ([`18747bcf`](https://github.com/soum91/AppVault/commit/18747bcf21a51bc531bebf13ce85c4eb93f4aaa0); `AppVault/BackupHomeView.swift`)
+- Add AppVault/BackupModels.swift ([`39a55264`](https://github.com/soum91/AppVault/commit/39a55264984faf9a9f15ed5a88c015b319cf2afb); `AppVault/BackupModels.swift`)
+- Add AppVault/AppVaultApp.swift ([`34c41977`](https://github.com/soum91/AppVault/commit/34c419777f82a5679b82c6779fb0b7e90e95dfbe); `AppVault/AppVaultApp.swift`)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/commits/v0.1.0)
+
 # 0.4.2 (9) - Store-attested account login
 
 AppVault 0.4.2 (9): Store-attested Apple login and IPA authorization
