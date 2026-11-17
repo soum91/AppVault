@@ -36,3 +36,13 @@ NSArray<NSDictionary *> *AVInstalledApps(void) {
  }
  return rows;
 }
+BOOL AVHasDecryptionPrivileges(void) {
+ void *sec=dlopen("/System/Library/Frameworks/Security.framework/Security",RTLD_NOW);
+ CFTypeRef (*create)(CFAllocatorRef)=dlsym(sec,"SecTaskCreateFromSelf");
+ CFTypeRef (*value)(CFTypeRef,CFStringRef,CFErrorRef*)=dlsym(sec,"SecTaskCopyValueForEntitlement");
+ if(!create||!value)return NO;
+ CFTypeRef task=create(NULL); if(!task)return NO;
+ CFTypeRef enabled=value(task,CFSTR("com.apple.private.security.no-sandbox"),NULL);
+ CFRelease(task); BOOL result=enabled && CFGetTypeID(enabled)==CFBooleanGetTypeID() && CFBooleanGetValue(enabled);
+ if(enabled)CFRelease(enabled); return result;
+}

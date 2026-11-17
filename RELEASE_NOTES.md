@@ -1,7 +1,7 @@
-AppVault 0.4.4 (11): account-bound verification sessions
+# AppVault 0.5.0 (12)
 
-- Clears a pending trusted-device verification context when signing in with a different account, preventing reuse of the preceding account's approval session.
-- Corrects diagnostics to identify the local WebKit/WASM authentication runtime and distinguish it from user-enabled JIT, which is not required.
-- Retains 0.4.3's broader Accept header, structured challenge parsing before HTTP-error rejection, session creation, trusted-device approval requests, code verification and redacted response traces. A bare HTTP 406 is not treated as evidence of two-factor authentication.
+Adds **IPAs > Decrypt Installed Apps** and a separate rootless jailbreak DEB. Select an installed user app, copy its app bundle, decrypt supported encrypted arm64 Mach-O slices with the device's FairPlay service, verify all copied binaries, and package `Payload/<App>.app` as an IPA. Includes nested frameworks and extensions; any unsupported or failed binary aborts the export and reports its failure. Original installed apps and earlier exports remain untouched.
 
-Validation: the verification-session fixtures, runtime integrity/smoke checks, live Store-proof acceptance and iOS compilation remain mandatory. 0.4.3 passed those checks before this follow-up. Real-account notification delivery, code verification, login, IPA download and exports remain unverified on a physical device. A notification request accepted by Apple does not prove that a trusted device displayed it.
+The normal IPA keeps its limited entitlements and saves encrypted Apple downloads. Use the jailbreak DEB on the jailbroken device containing the installed app and matching App Store license. This does not add arbitrary-file decryption on stock iOS. See DECRYPTION.md for implementation, limitations and research attribution.
+
+Validation: C parser fixtures and installed-version preflight passed locally. CI runs parser/protocol/runtime checks and compiles/packages both assets. Actual decryption on a physical jailbroken device, entitlement acceptance and diagnostic Copy/Share/Save remain unverified. Exported apps still need suitable signing.

@@ -27,6 +27,7 @@ struct BackupHomeView: View {
             }.tabItem { Label("Search", systemImage: "magnifyingglass") }
             NavigationStack {
                 List {
+                    Section { NavigationLink("Decrypt Installed Apps") { DecryptionView() } }
                     if store.downloads.isEmpty { Text("Saved IPA files will appear here.").foregroundStyle(.secondary) }
                     ForEach(store.downloads, id: \.self) { url in
                         ShareLink(item: url) { Label(url.lastPathComponent, systemImage: "doc.zipper") }
