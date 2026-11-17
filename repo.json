@@ -16,19 +16,19 @@
       "category": "utilities",
       "versions": [
         {
-          "version": "0.3.0",
-          "buildVersion": "5",
-          "date": "2026-11-15",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.0/AppVault-0.3.0.ipa",
-          "size": 280251,
+          "version": "0.3.1",
+          "buildVersion": "6",
+          "date": "2026-11-17",
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.1/AppVault-0.3.1.ipa",
+          "size": 292781,
           "minOSVersion": "16.0",
-          "localizedDescription": "Bounded database search, signed-group preflight and discovery report. Physical-device access remains unverified. No installed IPA extraction on iOS 27.0.1."
+          "localizedDescription": "Exclude protected container metadata from app-data backup; copy Documents and Library with an exclusions manifest. Physical-device retest remains pending."
         }
       ],
-      "version": "0.3.0",
-      "versionDate": "2026-11-15",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.0/AppVault-0.3.0.ipa",
-      "size": 280251,
+      "version": "0.3.1",
+      "versionDate": "2026-11-17",
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.3.1/AppVault-0.3.1.ipa",
+      "size": 292781,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     }
   ],
