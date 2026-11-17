@@ -1,5 +1,10 @@
 # Changelog
 
+## Catalog restoration
+
+- Restore the official DLiPA listing at the owner's request, retaining AhmedBafkir attribution and the upstream IPA download URL. No AppVault application feature is added.
+
+
 ## Catalog correction
 
 - Remove the DLiPA third-party listing and its catalog workflow/script. Adding an external application did not implement the requested IPA backup feature in AppVault.
