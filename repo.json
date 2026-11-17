@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "AppVault and official IPA download tools",
-  "description": "DLiPA is a separate third-party App Store IPA downloader. AppVault provides experimental data backups and does not extract installed IPA packages on iOS 27.0.1.",
+  "description": "Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
