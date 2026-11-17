@@ -46,7 +46,7 @@ struct BackupHomeView: View {
                         }
                     }
                     Section {
-                        Text("Uses native HTTPS requests directly to Apple, following the same Store protocol as DLiPA. No JIT, jailbreak, emulator, root certificate or credential relay is required. Session tokens and cookies stay in the device-only Keychain. Your password is not saved.").font(.footnote)
+                        Text("Signs in directly with Apple using native SAP request signing. No JIT, jailbreak, root certificate or credential relay is required. Session tokens and cookies stay in the device-only Keychain. Your password is not saved.").font(.footnote)
                         Text("Downloads account-authorized packages from Apple. Apple DRM remains; saving an IPA does not guarantee it can be installed through a sideloader.").font(.footnote)
                     }
                 }.navigationTitle("Account")
@@ -60,9 +60,9 @@ struct BackupHomeView: View {
                     }
                     Section("Diagnostics") { NavigationLink("Backend Report") { DiscoveryReport(text: store.report) } }
                     Section("Backend") {
-                        Text("Native Apple Store client · URLSession")
+                        Text("Native SAP-signed Apple Store client")
                         Link("AppVault source", destination: URL(string: "https://github.com/soum91/AppVault")!)
-                        Text("Direct Apple login and IPA download implementation. Apple may reject unsigned authentication with HTTP 403; this build reports that explicitly. Keep AppVault open during downloads. Physical-device login and exports remain unverified.").font(.footnote)
+                        Text("ApplePackage provides native request signing and a retained login session for verification codes. Keep AppVault open during downloads. Physical-device account login and exports remain unverified.").font(.footnote)
                     }
                 }.navigationTitle("Settings")
             }.tabItem { Label("Settings", systemImage: "gearshape") }

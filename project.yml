@@ -19,8 +19,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.soum91.appvault
         PRODUCT_NAME: AppVault
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: 0.4.1
-        CURRENT_PROJECT_VERSION: 8
+        MARKETING_VERSION: 0.4.2
+        CURRENT_PROJECT_VERSION: 9
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: AppVault
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
@@ -36,7 +36,11 @@ targets:
 
     dependencies:
       - package: ZIPFoundation
+      - package: ApplePackage
 packages:
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation.git
     from: 0.9.19
+  ApplePackage:
+    url: https://github.com/Lakr233/ApplePackage.git
+    revision: 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b

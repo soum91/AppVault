@@ -58,7 +58,7 @@ private enum VaultKeychain {
     var report: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
-        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nBackend: native URLSession, direct Apple Store protocol\nJIT/emulator: none\nStage: \(status)\nLast failure: \(lastFailure)\nPhysical-device authentication and exports: unverified"
+        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nBackend: ApplePackage native SAP-signed login, URLSession IPA downloads\nJIT/emulator: none\nStage: \(status)\nLast failure: \(lastFailure)\nPhysical-device authentication and exports: unverified"
     }
     init() {
         do {

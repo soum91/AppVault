@@ -1,14 +1,7 @@
-# AppVault 0.4.1 (8) verification
+# AppVault 0.4.2 (9) verification status
 
-- Source: dd61ecfbd84699258d0c109a4570edecd9ebb807.
-- GitHub build: https://github.com/soum91/AppVault/actions/runs/44023743376, successful.
-- Installed-version preflight, direct Store protocol fixtures, legacy copy fixtures, iOS device compilation, IPA packaging, prerelease publication and FlareStore feed refresh all passed.
-- Protocol fixtures verify relative/unsafe redirect handling, exact login plist keys and XML escaping, lowercase response headers, token-only account encoding, HTTP 403, 2FA challenge handling, SINF traversal rejection and allowed CDN hosts.
-- Downloaded the public release IPA and checked com.soum91.appvault, version 0.4.1, build 8, assigned AppIcon and default ATS configuration (no trust override).
-- Released IPA: 319,554 bytes; SHA-256 a4287d31d48dd09482e1d7bdd78a38c4e6881ab0cef627fc4c2bc673ea376969.
-- Confirmed that Go build and Unicorn uc_version markers are absent from the app executable. The emulator source, bridge, static-library settings and build script were removed.
-- FlareStore lists AppVault 0.4.1 (8). The separately requested official DLiPA entry remains unchanged.
+The unsigned login in 0.4.1 returned HTTP 403 on the user's device. Version 0.4.2 replaces it with the complete native ApplePackage Authenticator, pinned at 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b, including request signing and retained verification-code state.
 
-Not verified: physical-device startup, Apple Account login/2FA, actual IPA downloads, clipboard/share/Files export or reinstallation. Apple may reject unsigned authentication with HTTP 403. The app has no JIT dependency and does not claim to overcome Apple's server-side requirements.
+Required release gates are documented in the workflow: signing/handshake/authentication unit tests, controlled live signature acceptance, installed-version contract and iOS compilation. Build results must be read from the actual workflow, not inferred from this document.
 
-The historical release audit rejected v0.1.0's two-word file-add commits (for example, Add AppVault/BackupService.swift). Its classifier now accepts exact source filenames only when that same file appears in the commit diff; generic or mismatched subjects remain rejected. Local classifier fixtures passed. The previous red run is historical; the corrected workflow will reconcile it on its next scheduled run.
+No user password was supplied to this environment. Real-account login, 2FA delivery, actual downloads, clipboard/Share/Files exports and reinstallation remain unverified. The live probe can demonstrate signature acceptance; it cannot demonstrate a real user's login.

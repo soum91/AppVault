@@ -44,7 +44,7 @@ enum StoreProtocol {
     }
     static func plist(_ value: Any) throws -> Data { try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0) }
     static func dictionary(_ data: Data, status: Int) throws -> [String: Any] {
-        if status == 403 { throw failure("http_403", "Apple rejected this direct request (HTTP 403). Its authentication service may require a signed request; changing your password or enabling JIT will not repair this direct request.") }
+        if status == 403 { throw failure("http_403", "Apple rejected this Store request (HTTP 403). Open Settings > Backend Report for the installed version and failure code.") }
         if status == 429 { throw failure("http_429", "Apple rate-limited the request. Wait before trying again.") }
         guard (200..<300).contains(status) else { throw failure("http_\(status)", "Apple returned HTTP \(status).") }
         if let value = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] { return value }

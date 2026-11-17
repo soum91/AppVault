@@ -1,12 +1,12 @@
-AppVault 0.4.1 (8): native direct Apple Store client
+AppVault 0.4.2 (9): native SAP-signed Apple Account login
 
-- Removes the Go archive, Unicorn emulator, JIT capability gate and Apple framework asset downloads introduced in 0.4.0.
-- Implements Apple login with native URLSession HTTPS using the DLiPA-observed Configurator request format, live bag endpoint discovery, token-only Keychain account storage and persisted session cookies.
-- Handles redirects through case-insensitive header lookup, relative URL resolution, a five-hop limit and validated Apple HTTPS destinations. Does not reproduce DLiPA's exact-case Location lookup.
-- Keeps search, account sign-in, verification-code submission, IPA download, optional external version ID and native IPA sharing in AppVault. Public search works before login.
-- Validates the downloaded bundle, adds supplied Apple SINF license data and iTunes metadata to the IPA, and only lists the file as saved after packaging completes. Downloaded packages remain protected by Apple's DRM.
-- Preserves redacted diagnostics with verified Copy, Share and plain-text Files export. Passwords and verification codes are never written to account storage.
+- Replaces the unsigned login request that returned HTTP 403 in 0.4.1 with ApplePackage's complete native Authenticator, pinned to 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b.
+- Performs fresh SAP certificate/setup exchanges and sends X-Apple-ActionSignature over the exact authentication body. Signing uses native Swift/C arithmetic and OpenSSL; no emulator, JIT, private Apple framework or credential relay is involved.
+- Retains the same Authenticator, signing stream, endpoint and cookies when a verification code is submitted. Starting a new sign-in or changing the account establishes a new session.
+- Converts a successful library account to AppVault's token-only Keychain model. The library's Account object, which contains a password, is never serialized; the password is cleared before mapping. Successful cookies, DSID, storefront and pod are passed to the existing IPA download path.
+- Maps signed-request rejection, SAP setup failure and invalid verification-code failures to distinct redacted errors. The app no longer describes its login as unsigned.
+- Bundles ApplePackage's MIT notice and preserves the existing package identifier, icon and Keychain service.
 
-Validation: protocol fixtures cover redirect host boundaries, XML escaping and payload keys, header casing, token-only account encoding, explicit HTTP 403 rejection, 2FA challenge handling, SINF path traversal and CDN host validation. CI also checks installed-version metadata and compiles the device app. Physical-device Apple sign-in, actual IPA downloads, clipboard and Files export remain unverified.
+Release checks: installed-version preflight, existing direct Store fixtures, pinned upstream signing/handshake/authentication unit tests, controlled live signed/unsigned/corrupted authentication checks, and device compilation must all pass before publication. The live probe uses invented credentials: it verifies whether Apple accepts the signature, not a real account login or code delivery.
 
-Important limitation: no JIT or jailbreak is required by this native implementation. However, Apple's service can reject unsigned Store login with HTTP 403. This build reports that rejection and does not claim to bypass it or guarantee a working account login. An Apple Account app-specific password is not a substitute for this Store login protocol.
+Physical-device login with the user's account, actual IPA downloads and native export remain unverified. Apple account restrictions, invalid credentials and account-specific challenges can still prevent login. Apple DRM remains.
