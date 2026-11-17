@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.4.4] - 2026-11-17
+
+## Verified changes since v0.4.3
+
+- Package account-bound verification changes as AppVault 0.4.4 build 11 ([`88cb835d`](https://github.com/soum91/AppVault/commit/88cb835db8b8a443cf3568888b8e9bd334af1166); `.github/workflows/ios-build.yml`, `BUILD_VALIDATION.md`, `RELEASE_NOTES.md`, and 1 more)
+- Bind pending device verification to its account and describe the local runtime accurately ([`b3342f61`](https://github.com/soum91/AppVault/commit/b3342f614a1e6d9b3bf331536c9afff84b04e73b); `AppVault/DirectAppleStore.swift`, `AppVault/StoreService.swift`)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.4.3...v0.4.4)
+
 ## [v0.4.3] - 2026-11-17
 
 ## Verified changes since v0.4.2
