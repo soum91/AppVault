@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct BackupHomeView: View {
     @StateObject private var store = StoreService()
+    @StateObject private var signing = LocalSAPSigner.shared
     var body: some View {
         TabView {
             NavigationStack {
@@ -46,7 +47,7 @@ struct BackupHomeView: View {
                         }
                     }
                     Section {
-                        Text("Signs in directly with Apple using native SAP request signing. No JIT, jailbreak, root certificate or credential relay is required. Session tokens and cookies stay in the device-only Keychain. Your password is not saved.").font(.footnote)
+                        Text("Signs in directly with Apple using local request signing and Store device verification. No JIT, jailbreak, root certificate or credential relay is required. Session tokens and cookies stay in the device-only Keychain. Your password is not saved.").font(.footnote)
                         Text("Downloads account-authorized packages from Apple. Apple DRM remains; saving an IPA does not guarantee it can be installed through a sideloader.").font(.footnote)
                     }
                 }.navigationTitle("Account")
@@ -60,12 +61,15 @@ struct BackupHomeView: View {
                     }
                     Section("Diagnostics") { NavigationLink("Backend Report") { DiscoveryReport(text: store.report) } }
                     Section("Backend") {
-                        Text("Native SAP-signed Apple Store client")
+                        Text("Local Apple Store authentication")
                         Link("AppVault source", destination: URL(string: "https://github.com/soum91/AppVault")!)
-                        Text("ApplePackage provides native request signing and a retained login session for verification codes. Keep AppVault open during downloads. Physical-device account login and exports remain unverified.").font(.footnote)
+                        Text("On-device authentication handles SAP signing, Store device attestation and IPA authorization. Authentication components are downloaded once and verified before use. Keep AppVault open during downloads. Physical-device account login and exports remain unverified.").font(.footnote)
                     }
                 }.navigationTitle("Settings")
             }.tabItem { Label("Settings", systemImage: "gearshape") }
+        }
+        .background {
+            if let web = signing.webView { SigningRuntimeView(web: web).frame(width: 1, height: 1).opacity(0.01).allowsHitTesting(false).accessibilityHidden(true) }
         }
         .safeAreaInset(edge: .bottom) {
             if store.busy {

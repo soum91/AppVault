@@ -1,12 +1,11 @@
-AppVault 0.4.2 (9): native SAP-signed Apple Account login
+AppVault 0.4.2 (9): Store-attested Apple login and IPA authorization
 
-- Replaces the unsigned login request that returned HTTP 403 in 0.4.1 with ApplePackage's complete native Authenticator, pinned to 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b.
-- Performs fresh SAP certificate/setup exchanges and sends X-Apple-ActionSignature over the exact authentication body. Signing uses native Swift/C arithmetic and OpenSSL; no emulator, JIT, private Apple framework or credential relay is involved.
-- Retains the same Authenticator, signing stream, endpoint and cookies when a verification code is submitted. Starting a new sign-in or changing the account establishes a new session.
-- Converts a successful library account to AppVault's token-only Keychain model. The library's Account object, which contains a password, is never serialized; the password is cleared before mapping. Successful cookies, DSID, storefront and pod are passed to the existing IPA download path.
-- Maps signed-request rejection, SAP setup failure and invalid verification-code failures to distinct redacted errors. The app no longer describes its login as unsigned.
-- Bundles ApplePackage's MIT notice and preserves the existing package identifier, icon and Keychain service.
+- Replaces 0.4.1's unsigned login with SAP request signing plus the current Store AMD device-proof flow. The first SAP-only candidate returned empty HTTP 204 in live testing and was blocked from release.
+- Uses the pinned iPadn authentication runtime (81dd1f747e71b31629979e2c1de0fe234fe7de39) locally through a nonpersistent WebKit context. This requires no jailbreak or user-enabled JIT. It replaces the earlier unsuccessful Go/JIT and SAP-only approaches.
+- Handles Apple's RP/SP actions, provisions the Store proof, refreshes proof headers for requests/redirects, and retains provisioning state in device-only Keychain. Existing session cookies and password-token storage remain on-device; passwords and verification codes are not saved.
+- Uses Configurator/2.21, requests the current bag, preserves its advertised native authentication path, and signs the exact XML login body. Verification codes are submitted through the same AppVault account flow.
+- Uses ent/download with locally generated kbsync and Store proof for IPA authorization, then validates and finishes the IPA with supplied license and metadata entries.
+- Downloads the seven pinned runtime components once on the device and verifies every SHA-256 before execution. Extracted Apple runtime libraries are not included in AppVault's IPA. The local server binds only 127.0.0.1 behind a random path capability; its setup proxy permits only three fixed Apple URLs. WebKit navigation and network destinations are restricted to that local origin; Apple HTTPS certificate verification remains enabled.
+- Preserves AppVault's bundle identifier, icon, Keychain service, account UI, file sharing and redacted Copy/Share/Files diagnostics. Includes upstream license and runtime provenance notices.
 
-Release checks: installed-version preflight, existing direct Store fixtures, pinned upstream signing/handshake/authentication unit tests, controlled live signed/unsigned/corrupted authentication checks, and device compilation must all pass before publication. The live probe uses invented credentials: it verifies whether Apple accepts the signature, not a real account login or code delivery.
-
-Physical-device login with the user's account, actual IPA downloads and native export remain unverified. Apple account restrictions, invalid credentials and account-specific challenges can still prevent login. Apple DRM remains.
+Validation: the live runtime probe received HTTP 200 with Apple's SP provisioning challenge, generated the Store proof locally, then received HTTP 200 business authentication with the proof attached. It used invented account credentials and does not establish real-account login or code delivery. The pinned runtime's offline smoke tests, direct protocol fixtures and iOS compilation are release gates. Physical-device login/2FA, real-account IPA downloads and exports remain unverified. Apple DRM remains.

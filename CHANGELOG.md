@@ -1,47 +1,17 @@
-# Changelog
+# 0.4.2 (9) - Store-attested account login
 
-## [v0.1.0] - 2026-11-12
+AppVault 0.4.2 (9): Store-attested Apple login and IPA authorization
 
-## Verified changes since project start
+- Replaces 0.4.1's unsigned login with SAP request signing plus the current Store AMD device-proof flow. The first SAP-only candidate returned empty HTTP 204 in live testing and was blocked from release.
+- Uses the pinned iPadn authentication runtime (81dd1f747e71b31629979e2c1de0fe234fe7de39) locally through a nonpersistent WebKit context. This requires no jailbreak or user-enabled JIT. It replaces the earlier unsuccessful Go/JIT and SAP-only approaches.
+- Handles Apple's RP/SP actions, provisions the Store proof, refreshes proof headers for requests/redirects, and retains provisioning state in device-only Keychain. Existing session cookies and password-token storage remain on-device; passwords and verification codes are not saved.
+- Uses Configurator/2.21, requests the current bag, preserves its advertised native authentication path, and signs the exact XML login body. Verification codes are submitted through the same AppVault account flow.
+- Uses ent/download with locally generated kbsync and Store proof for IPA authorization, then validates and finishes the IPA with supplied license and metadata entries.
+- Downloads the seven pinned runtime components once on the device and verifies every SHA-256 before execution. Extracted Apple runtime libraries are not included in AppVault's IPA. The local server binds only 127.0.0.1 behind a random path capability; its setup proxy permits only three fixed Apple URLs. WebKit navigation and network destinations are restricted to that local origin; Apple HTTPS certificate verification remains enabled.
+- Preserves AppVault's bundle identifier, icon, Keychain service, account UI, file sharing and redacted Copy/Share/Files diagnostics. Includes upstream license and runtime provenance notices.
 
-- Add AppVault/WorseQueryBridge.h ([`7abcf239`](https://github.com/soum91/AppVault/commit/7abcf2395c91bb4686a5672a1a965ac2ef1571ce); `AppVault/WorseQueryBridge.h`)
-- Add AppVault/BackupService.swift ([`159da0db`](https://github.com/soum91/AppVault/commit/159da0dbcffc2c44be1a63634c9b8626fbb777c8); `AppVault/BackupService.swift`)
-- Add AppVault/BackupHomeView.swift ([`18747bcf`](https://github.com/soum91/AppVault/commit/18747bcf21a51bc531bebf13ce85c4eb93f4aaa0); `AppVault/BackupHomeView.swift`)
-- Add AppVault/BackupModels.swift ([`39a55264`](https://github.com/soum91/AppVault/commit/39a55264984faf9a9f15ed5a88c015b319cf2afb); `AppVault/BackupModels.swift`)
-- Add AppVault/AppVaultApp.swift ([`34c41977`](https://github.com/soum91/AppVault/commit/34c419777f82a5679b82c6779fb0b7e90e95dfbe); `AppVault/AppVaultApp.swift`)
+Validation: the live runtime probe received HTTP 200 with Apple's SP provisioning challenge, generated the Store proof locally, then received HTTP 200 business authentication with the proof attached. It used invented account credentials and does not establish real-account login or code delivery. The pinned runtime's offline smoke tests, direct protocol fixtures and iOS compilation are release gates. Physical-device login/2FA, real-account IPA downloads and exports remain unverified. Apple DRM remains.
 
-[Inspect exact code changes](https://github.com/soum91/AppVault/commits/v0.1.0)
-
-# 0.4.2 (9) - native signed account login
-
-AppVault 0.4.2 (9): native SAP-signed Apple Account login
-
-- Replaces the unsigned login request that returned HTTP 403 in 0.4.1 with ApplePackage's complete native Authenticator, pinned to 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b.
-- Performs fresh SAP certificate/setup exchanges and sends X-Apple-ActionSignature over the exact authentication body. Signing uses native Swift/C arithmetic and OpenSSL; no emulator, JIT, private Apple framework or credential relay is involved.
-- Retains the same Authenticator, signing stream, endpoint and cookies when a verification code is submitted. Starting a new sign-in or changing the account establishes a new session.
-- Converts a successful library account to AppVault's token-only Keychain model. The library's Account object, which contains a password, is never serialized; the password is cleared before mapping. Successful cookies, DSID, storefront and pod are passed to the existing IPA download path.
-- Maps signed-request rejection, SAP setup failure and invalid verification-code failures to distinct redacted errors. The app no longer describes its login as unsigned.
-- Bundles ApplePackage's MIT notice and preserves the existing package identifier, icon and Keychain service.
-
-Release checks: installed-version preflight, existing direct Store fixtures, pinned upstream signing/handshake/authentication unit tests, controlled live signed/unsigned/corrupted authentication checks, and device compilation must all pass before publication. The live probe uses invented credentials: it verifies whether Apple accepts the signature, not a real account login or code delivery.
-
-Physical-device login with the user's account, actual IPA downloads and native export remain unverified. Apple account restrictions, invalid credentials and account-specific challenges can still prevent login. Apple DRM remains.
-
-
-# Changelog
-
-## [v0.4.1] - 2026-11-17
-
-## Verified changes since v0.3.1
-
-- Replace emulator with DLiPA-style native direct Apple Store login and IPA downloads ([`dd61ecfb`](https://github.com/soum91/AppVault/commit/dd61ecfbd84699258d0c109a4570edecd9ebb807); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/DirectAppleStore.swift`, and 16 more)
-- Persist cookies in secure session state and redact actionable backend errors ([`ce59f077`](https://github.com/soum91/AppVault/commit/ce59f077ce6ad3e18ffe91261b60fc4159e8dbb0); `AppVault/BackupHomeView.swift`, `AppVault/IPAToolService.swift`, `NativeIPATool/cookies.go`, and 3 more)
-- Integrate pinned ipatool backend with native IPA UI and explicit JIT capability gate ([`d15b12c8`](https://github.com/soum91/AppVault/commit/d15b12c8ae2ed90a615f67e456dfdf1985749386); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/IPAToolBridge.h`, and 10 more)
-- Remove third-party DLiPA catalog substitution ([`8ffaec28`](https://github.com/soum91/AppVault/commit/8ffaec28eb1d6e9a69cfde6788597827f4f16d6f); `.github/workflows/catalog-dlipa.yml`, `repo.json`, `scripts/catalog_dlipa.py`)
-- Preserve separately cataloged IPA tools when refreshing the AppVault listing ([`2b08375c`](https://github.com/soum91/AppVault/commit/2b08375c887ab27bddc2c0e5ed08de8e7cc7e1b7); `.github/workflows/ios-build.yml`)
-- Catalog official DLiPA IPA downloader with metadata verification ([`e5d601f9`](https://github.com/soum91/AppVault/commit/e5d601f9ce77ee7c5362dd62cd5fe6508213e55c); `.github/workflows/catalog-dlipa.yml`, `scripts/catalog_dlipa.py`)
-
-[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.3.1...v0.4.1)
 
 # 0.4.1 (8) - direct native Store client
 

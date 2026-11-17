@@ -25,29 +25,19 @@ jobs:
         run: brew install xcodegen ldid
       - name: Verify direct Store protocol fixtures
         run: |
-          swiftc -parse-as-library AppVault/StoreProtocol.swift Tests/StoreProtocol/main.swift -o /tmp/appvault-store-tests
+          swiftc -parse-as-library AppVault/StoreProtocol.swift AppVault/Attestation/ApplePropertyList.swift Tests/StoreProtocol/main.swift -o /tmp/appvault-store-tests
           /tmp/appvault-store-tests
-      - name: Verify native signer and signed-login implementation
+      - name: Verify pinned on-device Store attestation runtime
         run: |
-          git clone https://github.com/Lakr233/ApplePackage.git /tmp/appvault-applepackage
-          git -C /tmp/appvault-applepackage checkout --detach 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b
-          swift test --package-path /tmp/appvault-applepackage --filter 'SAPAuthenticationRequestTests|SAPHandshakeTests|SAPSyntheticTests|SAPValidationTests|AuthenticateTests'
-      - name: Verify live signed authentication reaches Apple's business response
+          git clone https://github.com/mengangs/ipadn.git /tmp/appvault-runtime-source
+          git -C /tmp/appvault-runtime-source checkout --detach 81dd1f747e71b31629979e2c1de0fe234fe7de39
+          cd /tmp/appvault-runtime-source/iPadn-iOS
+          python3 scripts/assemble_runtime.py
+          node scripts/runtime_smoke_test.cjs
+      - name: Verify live Store device provisioning and signed authentication
         env:
-          APPLEPACKAGE_SAP_LIVE_PROBE: '1'
-          APPLEPACKAGE_SAP_PROBE_CONTROLS: '1'
-        run: |
-          set -o pipefail
-          swift test --package-path /tmp/appvault-applepackage --filter SAPLiveProbeTests 2>&1 | tee /tmp/appvault-sap-probe.log
-          python3 - <<'PY'
-          import json,pathlib
-          text=pathlib.Path('/tmp/appvault-sap-probe.log').read_text()
-          rows=[json.loads(line.split('SAP_PROBE_SUMMARY ',1)[1]) for line in text.splitlines() if 'SAP_PROBE_SUMMARY ' in line]
-          by={row['variant']:row for row in rows}
-          assert by['signed']['status']==200 and by['signed']['response_kind']=='plist', 'Signed request did not reach Apple business authentication'
-          assert by['unsigned']['status']==403 and by['corrupted']['status']==403, 'Unsigned/corrupted controls did not establish signature acceptance'
-          print('Verified: SAP-signed HTTP 200 business response; unsigned and corrupted controls HTTP 403. No real account was used.')
-          PY
+          APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
+        run: node scripts/store-runtime-probe.cjs
       - run: xcodegen generate
       - name: Build device app
         run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build

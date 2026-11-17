@@ -2,7 +2,7 @@ import Foundation
 import Security
 import SwiftUI
 
-private enum VaultKeychain {
+enum VaultKeychain {
     static func read(_ account: String) throws -> Data? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.soum91.appvault.ipatool", kSecAttrAccount as String: account,
@@ -58,7 +58,7 @@ private enum VaultKeychain {
     var report: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
-        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nBackend: ApplePackage native SAP-signed login, URLSession IPA downloads\nJIT/emulator: none\nStage: \(status)\nLast failure: \(lastFailure)\nPhysical-device authentication and exports: unverified"
+        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nBackend: local WebKit SAP + Store AMD attestation; native Apple HTTPS\nJIT/emulator: none\nStage: \(status)\nLast failure: \(lastFailure)\nPhysical-device authentication and exports: unverified"
     }
     init() {
         do {

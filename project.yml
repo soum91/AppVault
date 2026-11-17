@@ -12,6 +12,11 @@ targets:
   AppVault:
     type: application
     platform: iOS
+    info:
+      path: AppVault/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     sources:
       - path: AppVault
     settings:
@@ -36,11 +41,7 @@ targets:
 
     dependencies:
       - package: ZIPFoundation
-      - package: ApplePackage
 packages:
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation.git
     from: 0.9.19
-  ApplePackage:
-    url: https://github.com/Lakr233/ApplePackage.git
-    revision: 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b

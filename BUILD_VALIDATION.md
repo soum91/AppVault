@@ -1,7 +1,9 @@
-# AppVault 0.4.2 (9) verification status
+# AppVault 0.4.2 (9) validation
 
-The unsigned login in 0.4.1 returned HTTP 403 on the user's device. Version 0.4.2 replaces it with the complete native ApplePackage Authenticator, pinned at 391bfe6ee6598d73e4f94b88b38b50bd6f6ec67b, including request signing and retained verification-code state.
+0.4.1 returned unsigned HTTP 403. A SAP-only ApplePackage candidate passed unit tests but returned HTTP 204 in the live probe and was not released. The final candidate adds Store AMD provisioning and kbsync using pinned iPadn runtime 81dd1f747e71b31629979e2c1de0fe234fe7de39.
 
-Required release gates are documented in the workflow: signing/handshake/authentication unit tests, controlled live signature acceptance, installed-version contract and iOS compilation. Build results must be read from the actual workflow, not inferred from this document.
+Observed live locally: authentication HTTP 200 with SP and no prior proof; local Store provisioning; authentication HTTP 200 with provisioned proof and a business authentication response. No real user credentials were used. This does not establish real-account login/2FA or downloads.
 
-No user password was supplied to this environment. Real-account login, 2FA delivery, actual downloads, clipboard/Share/Files exports and reinstallation remain unverified. The live probe can demonstrate signature acceptance; it cannot demonstrate a real user's login.
+Required release gates: runtime component hashes and offline smoke tests, controlled live Store-proof acceptance, existing Store protocol fixtures, installed-version preflight and iOS device compilation.
+
+Physical-device startup, real-account login/2FA, real IPA downloads, Copy/Share/Files export and reinstallation remain unverified. No JIT entitlement or jailbreak is required by the WebKit runtime.

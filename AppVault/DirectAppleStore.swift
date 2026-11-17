@@ -1,6 +1,5 @@
 import Foundation
 import ZIPFoundation
-import ApplePackage
 
 struct StoreCookie: Codable {
     let name: String; let value: String; let domain: String; let path: String; let secure: Bool; let expires: Date?
@@ -26,8 +25,6 @@ private final class CDNDelegate: NSObject, URLSessionTaskDelegate {
 actor DirectAppleStore {
     private var state: DirectStoreState
     private let guid: String
-    private var authenticator: Authenticator?
-    private var authenticationEmail: String?
     private let session: URLSession
     private let cdn: URLSession
     init(guid: String, state: DirectStoreState?) {
@@ -44,7 +41,7 @@ actor DirectAppleStore {
         cdn = URLSession(configuration: downloadConfig, delegate: CDNDelegate(), delegateQueue: nil)
     }
     func snapshot() -> DirectStoreState { state }
-    func signOut() { state = DirectStoreState(account: nil, cookies: []); authenticator = nil; authenticationEmail = nil }
+    func signOut() { state = DirectStoreState(account: nil, cookies: []) }
     private func cookieHeader(_ url: URL) -> String {
         let cookies = state.cookies.compactMap(\.cookie).filter { c in
             let domain = c.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
@@ -65,7 +62,7 @@ actor DirectAppleStore {
             if c.expiresDate == nil || c.expiresDate! > Date() { state.cookies.append(StoreCookie(c)) }
         }
     }
-    private func request(_ original: URL, body: Data? = nil, contentType: String = "application/x-apple-plist", account: StoreAccount? = nil) async throws -> (Data, HTTPURLResponse) {
+    private func request(_ original: URL, body: Data? = nil, contentType: String = "application/x-apple-plist", account: StoreAccount? = nil, extraHeaders: ((URL) async throws -> [String: String])? = nil) async throws -> (Data, HTTPURLResponse) {
         var url = original
         for _ in 0..<6 {
             try Task.checkCancellation()
@@ -82,6 +79,7 @@ actor DirectAppleStore {
                 request.setValue(account.token, forHTTPHeaderField: "X-Token")
                 request.setValue(account.storefront, forHTTPHeaderField: "X-Apple-Store-Front")
             }
+            if let extraHeaders { for (name, value) in try await extraHeaders(url) { request.setValue(value, forHTTPHeaderField: name) } }
             let (data, raw) = try await session.data(for: request)
             guard let response = raw as? HTTPURLResponse else { throw StoreProtocol.failure("non_http", "Apple returned a non-HTTP response.") }
             retainCookies(response, url: url)
@@ -95,57 +93,55 @@ actor DirectAppleStore {
         }
         throw StoreProtocol.failure("redirect_limit", "Apple exceeded the five-redirect limit.")
     }
-    func login(email: String, password: String, code: String) async throws {
-        // ApplePackage implements fresh native SAP setup and signs the exact
-        // outgoing login body. Keep its actor alive across a 2FA continuation.
-        Configuration.deviceIdentifier = guid
-        APLogger.verbose = false
-        var logger = APLogger.logger
-        logger.logLevel = .critical
-        APLogger.logger = logger
-        do {
-            if code.isEmpty || authenticator == nil || authenticationEmail != email {
-                let cookies = state.cookies.map { cookie in
-                    ApplePackage.Cookie(name: cookie.name, value: cookie.value, path: cookie.path, domain: cookie.domain,
-                        expiresAt: cookie.expires?.timeIntervalSince1970, httpOnly: true, secure: cookie.secure)
-                }
-                authenticator = try await Authenticator(cookies: cookies)
-                authenticationEmail = email
-            }
-            guard let authenticator else { throw StoreProtocol.failure("auth_session_missing", "Start sign-in again to establish a fresh authentication session.") }
+    private func attested(_ url: URL, body: Data, account: StoreAccount? = nil, signature: String? = nil) async throws -> (Data, HTTPURLResponse) {
+        let signer = await LocalSAPSigner.shared
+        var didReset = false, didProvision = false
+        for _ in 0..<3 {
             try Task.checkCancellation()
-            var result = try await authenticator.authenticate(email: email, password: password, code: code)
-            // Never serialize ApplePackage.Account, which includes a password.
-            // Convert to AppVault's token-only state before any persistence.
-            result.password = ""
-            guard !result.passwordToken.isEmpty, !result.directoryServicesIdentifier.isEmpty else {
-                throw StoreProtocol.failure("invalid_signed_session", "Apple returned an incomplete signed-in session.")
+            let (data, response) = try await request(url, body: body, account: account, extraHeaders: { _ in
+                var headers = try await signer.storeProofHeaders(guid: self.guid, useCache: true) ?? [:]
+                if let signature { headers["X-Apple-ActionSignature"] = signature }
+                return headers
+            })
+            let fields = (try? StoreProtocol.dictionary(data, status: response.statusCode)) ?? [:]
+            let action = (response.value(forHTTPHeaderField: "X-Apple-AMD-Action") ??
+                (fields["customerMessage"] as? String)?.split(separator: ":").last.map(String.init) ?? "").uppercased()
+            if action == "RP", !didReset {
+                try await signer.resetStoreProof(guid: guid); didReset = true; continue
             }
-            state.account = StoreAccount(email: result.email, token: result.passwordToken, dsid: result.directoryServicesIdentifier,
-                storefront: result.store, pod: result.pod)
-            state.cookies = result.cookie.map { StoreCookie(name: $0.name, value: $0.value, domain: $0.domain ?? "buy.itunes.apple.com",
-                path: $0.path, secure: $0.secure, expires: $0.expiresAt.map(Date.init(timeIntervalSince1970:))) }
-            self.authenticator = nil; authenticationEmail = nil
-        } catch AuthenticationError.verificationCodeRequired {
-            throw StoreProtocol.failure("two_factor", "Apple requested a verification code or rejected the credentials. If a code appeared on your trusted device, enter it below; otherwise check the email and password. A code prompt alone does not prove Apple sent one.")
-        } catch let failure as StoreFailure { throw failure
-        } catch {
-            // Match only known status/error classes; never expose a raw server
-            // body, account object, SAP state, signature, password or token.
-            let description = error.localizedDescription.lowercased()
-            if description.contains("403") {
-                throw StoreProtocol.failure("signed_auth_http_403", "Apple rejected the SAP-signed sign-in request (HTTP 403). This is no longer the unsigned login path. Open Settings > Backend Report for the installed version and error code.")
+            if action == "SP", !didProvision {
+                guard let challenge = response.value(forHTTPHeaderField: "X-Apple-AMD-Data"), challenge.count <= 16384,
+                      let bytes = Data(base64Encoded: challenge), !bytes.isEmpty, bytes.base64EncodedString() == challenge else {
+                    throw StoreProtocol.failure("invalid_store_challenge", "Apple returned an invalid device-attestation challenge.")
+                }
+                _ = try await signer.provisionStoreProof(challenge: challenge, guid: guid, useCache: true)
+                didProvision = true; continue
             }
-            if description.contains("verification") || description.contains("5005") {
-                throw StoreProtocol.failure("verification_rejected", "Apple rejected the verification code. Request a current code on your trusted device and try again.")
-            }
-            if error is SAPError {
-                self.authenticator = nil; authenticationEmail = nil
-                throw StoreProtocol.failure("sap_setup_failed", "Native Apple request signing could not establish a fresh session. Check the connection and try signing in again.")
-            }
-            let issue = error as NSError
-            throw StoreProtocol.failure("auth_\(issue.code)", "Apple sign-in did not complete. Check account status, credentials and the network connection. No successful login is claimed.")
+            if action == "SP" || action == "RP" { throw StoreProtocol.failure("store_proof_rejected", "Apple rejected the Store device proof after provisioning.") }
+            return (data, response)
         }
+        throw StoreProtocol.failure("store_proof_limit", "Store device verification exceeded its retry limit.")
+    }
+    func login(email: String, password: String, code: String) async throws {
+        guard code.isEmpty || (code.count == 6 && code.allSatisfy({ $0.isASCII && $0.isNumber })) else {
+            throw StoreProtocol.failure("invalid_code", "Enter a six-digit verification code.")
+        }
+        let (bagData, bagResponse) = try await request(URL(string: "https://init.itunes.apple.com/bag.xml?guid=\(guid)&ix=6")!)
+        let bag = try StoreProtocol.dictionary(bagData, status: bagResponse.statusCode)
+        let urls = bag["urlBag"] as? [String: Any] ?? bag
+        guard let text = (bag["authenticateAccount"] ?? urls["authenticateAccount"]) as? String,
+              let endpoint = URL(string: text), StoreProtocol.validStoreURL(endpoint) else {
+            throw StoreProtocol.failure("bag_endpoint", "Apple did not advertise a valid HTTPS authentication endpoint.")
+        }
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
+        // Keep the native path exactly as advertised; forcing /fast breaks AMD.
+        var items = components.queryItems ?? []; items.removeAll { $0.name == "guid" }; items.append(URLQueryItem(name: "guid", value: guid)); components.queryItems = items
+        let body = try StoreProtocol.loginBody(email: email, password: password, code: code, guid: guid)
+        let signer = await LocalSAPSigner.shared
+        let signature = try await signer.sign(body, guid: guid, useCache: true, cacheSignature: false)
+        let (data, response) = try await attested(components.url!, body: body, signature: signature)
+        let fields = try StoreProtocol.dictionary(data, status: response.statusCode)
+        state.account = try StoreProtocol.loginResult(fields, response: response, email: email, suppliedCode: !code.isEmpty)
     }
     func search(_ term: String) async throws -> [StoreApp] {
         var components = URLComponents(string: "https://itunes.apple.com/search")!
@@ -164,14 +160,15 @@ actor DirectAppleStore {
     func download(_ app: StoreApp, directory: URL, versionID: String, progress: @escaping @Sendable (String) -> Void) async throws -> URL {
         guard let account = state.account else { throw StoreProtocol.failure("sign_in_required", "Sign in to your Apple Account first.") }
         progress("Requesting the IPA from Apple")
-        let pod = account.pod.flatMap { Int($0) }.map { "p\($0)-buy.itunes.apple.com" } ?? "buy.itunes.apple.com"
-        let url = URL(string: "https://\(pod)/WebObjects/MZFinance.woa/wa/volumeStoreDownloadProduct?guid=\(guid)")!
-        var payload: [String: Any] = ["creditDisplay":"", "guid":guid, "salableAdamId":String(app.trackId)]
+        let url = URL(string: "https://downloaddispatch.itunes.apple.com/WebObjects/DownloadDispatch.woa/wa/ent/download?guid=\(guid)")!
+        let signer = await LocalSAPSigner.shared
+        let sync = try await signer.kbsync(guid: guid, dsid: account.dsid, useCache: true)
+        var payload: [String: Any] = ["creditDisplay":"", "guid":guid, "salableAdamId":NSNumber(value: app.trackId), "serialNumber":"0", "kbsync":sync]
         if !versionID.isEmpty {
             guard versionID.allSatisfy(\.isNumber) else { throw StoreProtocol.failure("invalid_version", "The external version identifier must contain digits only.") }
             payload["externalVersionId"] = versionID
         }
-        let (data, response) = try await request(url, body: StoreProtocol.plist(payload), account: account)
+        let (data, response) = try await attested(url, body: StoreProtocol.plist(payload), account: account)
         let dict = try StoreProtocol.dictionary(data, status: response.statusCode)
         if let failure = dict["failureType"], !String(describing: failure).isEmpty {
             let value = String(describing: failure)

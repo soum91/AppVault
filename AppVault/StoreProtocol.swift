@@ -21,7 +21,7 @@ struct StoreFailure: LocalizedError {
     var errorDescription: String? { "\(message) [\(code)]" }
 }
 enum StoreProtocol {
-    static let userAgent = "Configurator/2.20 (Macintosh; OS X 26.5.1; 25F80) AppleWebKit/1624.2.5.11.4"
+    static let userAgent = "Configurator/2.21 (Macintosh; OS X 15.2; 24C5089c) AppleWebKit/0620.1.16.11.6"
     static func failure(_ code: String, _ message: String) -> StoreFailure { StoreFailure(code: code, message: message) }
     static func validStoreURL(_ url: URL) -> Bool {
         guard url.scheme?.lowercased() == "https", url.user == nil, url.password == nil, url.port == nil || url.port == 443, let host = url.host?.lowercased() else { return false }
@@ -39,7 +39,7 @@ enum StoreProtocol {
         return url
     }
     static func loginBody(email: String, password: String, code: String, guid: String) throws -> Data {
-        let body = ["appleId": email, "attempt": "1", "createSession": "true", "guid": guid, "password": password + code, "rmp": "0", "why": "signIn"]
+        let body = ["appleId": email, "attempt": code.isEmpty ? "1" : "2", "guid": guid, "password": password + code, "rmp": "0", "why": "signIn"]
         return try plist(body)
     }
     static func plist(_ value: Any) throws -> Data { try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0) }
@@ -47,6 +47,7 @@ enum StoreProtocol {
         if status == 403 { throw failure("http_403", "Apple rejected this Store request (HTTP 403). Open Settings > Backend Report for the installed version and failure code.") }
         if status == 429 { throw failure("http_429", "Apple rate-limited the request. Wait before trying again.") }
         guard (200..<300).contains(status) else { throw failure("http_\(status)", "Apple returned HTTP \(status).") }
+        if let parsed = try? ApplePropertyList.dictionary(data) { return parsed }
         if let value = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] { return value }
         if let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { return value }
         // Some bag replies wrap an XML plist in a short preamble.

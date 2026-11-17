@@ -9,7 +9,7 @@ import Foundation
         }
         let body = try StoreProtocol.loginBody(email: "fixture@example.invalid", password: "a&<\"'", code: "123456", guid: "001122334455")
         let plist = try PropertyListSerialization.propertyList(from: body, options: [], format: nil) as! [String: String]
-        precondition(plist["password"] == "a&<\"'123456" && plist["createSession"] == "true" && plist["attempt"] == "1")
+        precondition(plist["password"] == "a&<\"'123456" && plist["createSession"] == nil && plist["attempt"] == "1")
         let headers = HTTPURLResponse(url: origin, statusCode: 200, httpVersion: nil, headerFields: ["x-set-apple-store-front":"143455-1,29", "pod":"25"])!
         let account = try StoreProtocol.loginResult(["passwordToken":"fixture-token", "dsPersonId":12345], response: headers, email: "fixture@example.invalid", suppliedCode: false)
         precondition(account.dsid == "12345" && account.storefront == "143455-1,29")
