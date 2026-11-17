@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.5.0] - 2026-11-17
+
+## Verified changes since v0.4.4
+
+- Convert native slice counts at Swift decryption bridge boundary ([`7bb93626`](https://github.com/soum91/AppVault/commit/7bb936267daeab01083f4d809d8adb02e2be9b38); `AppVault/Decryption/DecryptionService.swift`)
+- Reject unchecked bundle entries and make copied binaries writable for export ([`38990398`](https://github.com/soum91/AppVault/commit/3899039818e624a2f931a632c417be74fb0de344); `AppVault/Decryption/DecryptionService.swift`, `DECRYPTION.md`)
+- Add privileged installed-app decryption and verified IPA export with rootless package ([`20471858`](https://github.com/soum91/AppVault/commit/20471858122ce88c9b6bace4b3eb105764c37ff7); `.github/workflows/ios-build.yml`, `AppVault/Access.m`, `AppVault/BackupHomeView.swift`, and 13 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.4.4...v0.5.0)
+
 ## [v0.3.1] - 2026-11-17
 
 ## Verified changes since v0.3.0
