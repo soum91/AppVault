@@ -51,7 +51,8 @@ jobs:
           from datetime import datetime,timezone
           repo=os.environ['GITHUB_REPOSITORY']
           p='repo.json'
-          data=json.load(open(p))
+          latest=json.loads(subprocess.check_output(['gh','api','repos/'+repo+'/contents/'+p]))
+          data=json.loads(base64.b64decode(latest['content']))
           app=data['apps'][0]
           app['localizedDescription']='Experimental app-data ZIP backup with bounded LaunchServices database discovery. Requires a usable signed App Group. Device behavior remains unverified. Installed IPA extraction on iOS 27.0.1 is unsupported.'
           app['iconURL']='https://raw.githubusercontent.com/'+repo+'/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png'
