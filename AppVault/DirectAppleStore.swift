@@ -163,6 +163,7 @@ actor DirectAppleStore {
             throw StoreProtocol.failure("invalid_code", "Enter a six-digit verification code.")
         }
         if code.isEmpty { routingStorefront = nil; routingPod = nil; clearVerification() }
+        if let owner = verificationEmail, owner != email { clearVerification() }
         var sessionVerified = false
         if !code.isEmpty, let context = verification, verificationEmail == email {
             _ = try await verificationRequest(context.request(code: code), stage: "trusted_device_code")
