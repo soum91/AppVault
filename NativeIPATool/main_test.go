@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"github.com/majd/ipatool/v2/pkg/appstore"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -35,5 +37,24 @@ func TestErrorRedactsPasswordTokenAndEmail(t *testing.T) {
 		if strings.Contains(got, secret) {
 			t.Fatalf("error contained secret %s", secret)
 		}
+	}
+}
+func TestCookiesSurviveKeychainRoundTripAndDeletion(t *testing.T) {
+	v := vault{}
+	u, _ := url.Parse("https://buy.itunes.apple.com/WebObjects/test")
+	jar := newSecureJar(v)
+	jar.SetCookies(u, []*http.Cookie{{Name: "session", Value: "cookie-fixture", Path: "/", Secure: true, HttpOnly: true}})
+	if err := jar.Save(); err != nil {
+		t.Fatal(err)
+	}
+	restored := newSecureJar(v)
+	got := restored.Cookies(u)
+	if len(got) != 1 || got[0].Value != "cookie-fixture" {
+		t.Fatal("session cookie was not restored")
+	}
+	restored.SetCookies(u, []*http.Cookie{{Name: "session", MaxAge: -1, Path: "/"}})
+	restored.Save()
+	if len(newSecureJar(v).Cookies(u)) != 0 {
+		t.Fatal("deleted session cookie returned")
 	}
 }
