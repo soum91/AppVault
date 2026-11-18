@@ -1,9 +1,9 @@
 Package: com.soum91.appvault
-Name: AppVault
-Version: 0.6.4
+Name: AppVault Decryptor
+Version: 0.6.5
 Architecture: iphoneos-arm64
-Description: App Store IPA downloads and privileged installed-app decryption/export.
- Experimental decryption backend; device validation required.
+Description: Standalone rootless installed-app IPA decryption/export; separate sandboxed AppVault IPA handles Apple Account authentication and downloads.
+ Privileged experimental decryption backend; device validation required.
 Maintainer: soum91
 Author: soum91
 Section: Utilities

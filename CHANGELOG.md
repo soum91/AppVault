@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.6.5] - 2026-11-18
+
+- Replace the all-in-one rootless AppVault application with a standalone
+  privileged **AppVault Decryptor**. Keep account-based Store downloads in
+  the separate ordinary sandboxed AppVault IPA.
+- The Dopamine iOS 16.1.1 device repeatedly terminated the privileged app's
+  WebKit content process before page navigation; the new rootless app does not
+  include the WebKit authentication runtime.
+- Preserve the installed rootless Debian package ID for in-place Sileo upgrades,
+  migrate the icon path, and keep the existing rootless export storage.
+- Expose actual installed version/build in the Decryptor UI and add CI
+  checks preventing Store/WebKit code from entering the privileged target.
+- Functional installed-app export, stock AppVault account login and FairPlay
+  handling remain unverified on a physical device.
+
+
 ## [v0.6.4] - 2026-11-18
 
 - Keep the SAP/WASM WebKit view visibly attached at 140pt height instead of

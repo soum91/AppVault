@@ -1,3 +1,20 @@
+## iOS 16 Dopamine architecture (0.6.5)
+
+AppVault's old privileged rootless build repeatedly terminated the `WKWebView`
+WebContent process before Apple Account authentication. From 0.6.5 onward:
+
+- **AppVault IPA:** sandboxed Store search/login and Apple-authorized IPA downloads.
+  Install using FlareStore or EmberSign, not as the rootless DEB.
+- **AppVault Decryptor:** standalone privileged app installed by the same existing
+  `com.soum91.appvault` rootless Sileo package. Scan **installed** applications,
+  decrypt eligible Mach-O binaries and export a checked IPA without WebKit.
+
+Both icons are expected. The rootless package replaces its old AppVault icon
+with the Decryptor icon. AppVault Decryptor deliberately does not request Apple
+Account credentials. This avoids the observed process-launch problem, but
+does not prove the decrypted-IPA feature works on the device. The Store IPA and
+rootless Decryptor do not automatically share sessions or downloaded files.
+
 ## iOS 16 WebKit local authentication runtime (0.6.4)
 
 The local SAP/WASM signer now uses an actually attached, visible WebKit view during login rather than a translucent 1×1 view. Memory warnings no longer deliberately reset the listener while a signing operation is active. AppVault > Settings > Backend Report includes bounded, credentials-free runtime stage markers and a specific `WEB_CONTENT_EXIT` flag when WebKit terminates.
