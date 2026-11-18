@@ -16,12 +16,15 @@ import UniformTypeIdentifiers
         guard !busy else { return }
         guard let template = Bundle.main.url(forResource: "DecryptHelper", withExtension: "zip") else { error = "This build has no helper template. Install the complete AppVault release."; return }
         output = nil; error = nil; busy = true; log = "Preparing local helper. No credentials or packages are uploaded.\n"
-        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Helpers")
+        let folder = VaultStorage.exports.appendingPathComponent("Helpers", isDirectory: true)
         DispatchQueue.global(qos: .userInitiated).async {
             let scoped = input.startAccessingSecurityScopedResource()
             defer { if scoped { input.stopAccessingSecurityScopedResource() } }
             do {
-                let out = try HelperPreparation.prepare(ipa: input, template: template, folder: folder) { message in
+                try VaultStorage.ensureWritable(folder, operation: "stock helper IPA export")
+                try VaultStorage.ensureWritable(VaultStorage.workspace, operation: "stock helper staging")
+                let out = try HelperPreparation.prepare(ipa: input, template: template,
+                                                       folder: folder, workspace: VaultStorage.workspace) { message in
                     DispatchQueue.main.async { self.status = message; self.log += message + "\n" }
                 }
                 DispatchQueue.main.async { self.output = out; self.busy = false; self.status = "Ready to sign and install" }
