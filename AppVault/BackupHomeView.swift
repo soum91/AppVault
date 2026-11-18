@@ -86,8 +86,29 @@ struct BackupHomeView: View {
                 }.navigationTitle("Settings")
             }.tabItem { Label("Settings", systemImage: "gearshape") }
         }
-        .background {
-            if let web = signing.webView { SigningRuntimeView(web: web).frame(width: 1, height: 1).opacity(0.01).allowsHitTesting(false).accessibilityHidden(true) }
+        .overlay(alignment: .center) {
+            if signing.isPresented, let web = signing.webView {
+                // The runtime has no visual content, but WebKit must remain
+                // visibly attached at a real size while its WASM signer runs.
+                // A 1x1 translucent offscreen view is prone to WebContent
+                // suspension/termination on iOS 16 under memory pressure.
+                VStack(spacing: 12) {
+                    Text("Local authentication engine").font(.headline)
+                    SigningRuntimeView(web: web)
+                        .frame(height: 140)
+                        .background(Color(uiColor: .systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                    Text(signing.stage).font(.caption).foregroundStyle(.secondary)
+                    Text("Keep AppVault open during this step.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: 360)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding()
+            }
         }
         .safeAreaInset(edge: .bottom) {
             if store.busy {

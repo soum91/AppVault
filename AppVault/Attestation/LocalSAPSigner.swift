@@ -28,6 +28,17 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
     private var reusableBase: URL?
     private var idleTimeout: Task<Void, Never>?
     private var memoryObserver: AnyCancellable?
+    private var recentEvents: [String] = []
+    private var lastWebContentExit = false
+    var diagnosticSummary: String {
+        let state = "Local signer: stage=\(stage); index=\(stageIndex); web_content_exit=\(lastWebContentExit)"
+        return state + "\nRuntime events: " + recentEvents.joined(separator: " | ")
+    }
+    private func recordStage(_ label: String) {
+        // Only record fixed, user-safe stage names and numeric error codes.
+        recentEvents.append(label)
+        if recentEvents.count > 24 { recentEvents.removeFirst(recentEvents.count - 24) }
+    }
 
     /// Set around work the user is waiting for (getting an app, signing in).
     /// It goes ahead of background work such as reading version details.
@@ -47,10 +58,20 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         memoryObserver = Publishers.Merge(
             NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification),
             NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification))
-            .sink { [weak self] _ in
+            .sink { [weak self] notification in
+                let memoryWarning = notification.name == UIApplication.didReceiveMemoryWarningNotification
                 Task { @MainActor in
-                    self?.discardIdleRuntime()
-                    await self?.server.reset()
+                    guard let self else { return }
+                    if self.operationID != nil {
+                        // Never tear down the active SAP proxy as soon as the
+                        // heavyweight WebKit/WASM runtime raises a memory warning.
+                        // Cancelling its loopback listener here breaks signing.
+                        self.recordStage(memoryWarning
+                            ? "memory-warning-active-preserved" : "background-event-active")
+                        return
+                    }
+                    self.discardIdleRuntime()
+                    await self.server.reset()
                 }
             }
     }
@@ -231,6 +252,9 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         // keep taking the runtime before a waiting user action gets it.
         try await acquireTurn()
         let id = UUID(); operationID = id; terminalError = nil
+        recentEvents.removeAll()
+        lastWebContentExit = false
+        recordStage("operation-start")
         let revision = cacheRevision
         var succeeded = false
         idleTimeout?.cancel(); idleTimeout = nil
@@ -239,10 +263,14 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             progress("Preparing local authentication runtime")
+            recordStage("assets-preparing")
             try await RuntimeAssets.prepare(progress: progress)
+            recordStage("assets-ready")
             try Task.checkCancellation()
             progress("Starting local signing service")
+            recordStage("loopback-starting")
             try await server.start()
+            recordStage("loopback-ready")
             try checkActive(id)
             guard let base = server.baseURL else { throw ToolError.message(AppText.text("暂时无法完成验证，请重试")) }
             let web: WKWebView
@@ -258,9 +286,14 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             web.configuration.userContentController.add(self, name: "progress")
             web.navigationDelegate = self
             webView = web; isPresented = true
+            recordStage("webview-attaching")
+            // Give SwiftUI an opportunity to attach the signer WKWebView at a
+            // normal visible size before starting expensive WebAssembly.
+            await Task.yield()
             if !warm {
                 armTimeout(id: id, seconds: 45, message: AppText.text("本地验证环境加载超时，请重试。"))
                 progress("Loading local authentication page")
+                recordStage("navigation-starting")
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                     navigation = continuation
                     web.load(URLRequest(url: base.appendingPathComponent("runtime/index.html")))
@@ -271,6 +304,7 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             try checkActive(id)
             armTimeout(id: id, seconds: timeoutSeconds, message: AppText.text("验证已超过 3 分钟，已停止本次操作。请保持应用在前台后重试。"))
             progress("Signing Apple authentication request")
+            recordStage("javascript-starting")
             var values = arguments
             values["proxy"] = base.appendingPathComponent("proxy").absoluteString
             let result: String
@@ -283,9 +317,11 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
                             self.evaluation = nil
                             switch result {
                             case .success(let value):
+                                self.recordStage("javascript-completed")
                                 if let text = value as? String, !text.isEmpty { continuation.resume(returning: text) }
                                 else { continuation.resume(throwing: ToolError.message(AppText.text("验证结果为空，请重试"))) }
                             case .failure(let err):
+                                self.recordStage("javascript-error-\((err as NSError).code)")
                                 continuation.resume(throwing: err)
                             }
                         }
@@ -407,6 +443,7 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.webView === webView, operationID != nil, let index = message.body as? Int, (1...2).contains(index) else { return }
         stageIndex = index
+        recordStage("javascript-stage-\(index)")
         stage = index == 1 ? AppText.text("加载验证组件")
             : title == AppText.text("准备下载") ? AppText.text("生成下载授权数据")
             : title == AppText.text("验证设备") ? AppText.text("完成设备安全验证") : AppText.text("生成请求签名")
@@ -419,16 +456,21 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard webView === self.webView, terminalError == nil else { return }
+        recordStage("navigation-complete")
         finishNavigation(.success(()))
     }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        guard webView === self.webView else { return }; finishNavigation(.failure(error))
+        guard webView === self.webView else { return }
+        recordStage("navigation-error-\((error as NSError).code)")
+        finishNavigation(.failure(error))
     }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         guard webView === self.webView else { return }; finishNavigation(.failure(error))
     }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard webView === self.webView, let id = operationID else { return }
-        stop(id: id, error: ToolError.message(AppText.text("验证意外中断，请重试")))
+        lastWebContentExit = true
+        recordStage("WEB_CONTENT_EXIT")
+        stop(id: id, error: ToolError.message("WebKit authentication process terminated (WEB_CONTENT_EXIT). The local signer stopped before Apple's login/2FA response; see Settings > Backend Report."))
     }
 }

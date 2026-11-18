@@ -1,3 +1,9 @@
+## iOS 16 WebKit local authentication runtime (0.6.4)
+
+The local SAP/WASM signer now uses an actually attached, visible WebKit view during login rather than a translucent 1×1 view. Memory warnings no longer deliberately reset the listener while a signing operation is active. AppVault > Settings > Backend Report includes bounded, credentials-free runtime stage markers and a specific `WEB_CONTENT_EXIT` flag when WebKit terminates.
+
+This targets a suspected root cause of the reported device failure but physical-device sign-in remains unverified. Manual verification-code entry does not bypass a signer crash; Apple can only send a trusted-device notification when it returns a valid challenge.
+
 ## Manual Apple Account verification code (0.6.3)
 
 The Account screen now offers **Use a Verification Code** before a server

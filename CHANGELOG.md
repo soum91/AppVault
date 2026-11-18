@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.6.4] - 2026-11-18
+
+- Keep the SAP/WASM WebKit view visibly attached at 140pt height instead of
+  an almost invisible 1×1 view while signing on iOS 16.
+- Do not shut down the active local signing proxy when iOS posts a memory
+  warning; reset only an idle runtime.
+- Show `WEB_CONTENT_EXIT` when WebKit's content process terminates and record
+  safe local signer stages in the Backend Report for device diagnosis.
+- Add CI guards for these regressions; actual login on iOS 16.1.1 remains
+  unverified until a device test.
+
+
 ## [v0.6.3] - 2026-11-18
 
 - Expose existing Apple Account verification-code entry for both sandboxed and

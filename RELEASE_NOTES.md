@@ -1,11 +1,11 @@
-# AppVault 0.6.3 (16) - trusted-device code entry on iOS 16
+# AppVault 0.6.4 (17): iOS 16 WebKit runtime survival and diagnostics
 
-The rootless jailbreak package and stock IPA use the same Store authentication implementation. This release makes the already-supported manual six-digit Apple Account verification-code path accessible on both before an Apple-issued challenge is displayed.
+The 0.6.3 jailbreak device reported **Apple authentication runtime could not complete** before an Apple Store login response. In current source, this generic alert can mask a WebKit WebContent process termination during the embedded SAP WebAssembly engine.
 
-- Add **Use a Verification Code** to the Account screen, allowing entry of a code obtained directly from an existing trusted Apple device.
-- Preserve Apple's original authentication requirements: when Apple issues an HSA2 session, continue to request a trusted-device approval and verify the code through that session.
-- When no HSA2 session exists, submit the code using the existing Store protocol password-plus-code attempt, without sending it to any third-party server.
-- Validate the code format locally, clear it when the manual field is dismissed or the operation is cancelled, and preserve the existing device-only Keychain session rules.
-- Add a regression gate for the opt-in manual-code interface, server-issued approval session checks, and the pre-existing code-submission path.
+Changes:
+- Replace the almost invisible 1×1 WebKit authentication view with a real, foreground, 140-point signing view in a temporary AppVault overlay. The upstream runtime HTML is deliberately blank; it only hosts the local signing scripts. This keeps the actual WebKit view attached and visible while the heavy runtime is executing.
+- Fix a concrete lifecycle problem: AppVault previously reset its local signing/proxy listener unconditionally on **memory warning**, even while signing was underway. Preserve the active listener; clean up idle instances only.
+- Emit a distinct `WEB_CONTENT_EXIT` failure when iOS terminates the WebContent process. Record bounded, credentials-free runtime steps (asset loading, loopback readiness, page navigation, JavaScript execution, WebKit exit) in **Settings > Backend Report**.
+- Retain the existing manual Apple Account six-digit verification code, Apple-issued approval handling, signed Store requests, pinned runtime hashes, private storage, rootless decryption and export paths.
 
-**Limits:** This does not programmatically force Apple to generate a trusted-device push notification when Apple has not issued a verification session. The 0.6.0 device report showed Store bag HTTP 200 but no authenticated-login response, so a failure of the local WebKit/SAP signer can still block sign-in before 2FA. The stock IPA and rootless DEB share this signer. Physical-device login and IPA downloads remain unverified.
+**Verification boundary:** The Python regression checks, Apple Store fixtures and native GitHub CI build must pass before publication. Neither the previous device screenshot nor CI can conclusively prove that the WebContent process was killed by memory pressure. A successful Apple Account login or decrypted export on Dopamine/iOS 16.1.1 remains unverified until tested on the physical device. This release does not bypass 2FA or change Apple's Store authentication endpoints.
