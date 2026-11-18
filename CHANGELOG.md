@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.6.5] - 2026-11-18
+
+- Rootless DEB: run the pinned SAP runtime in an in-process JavaScriptCore
+  context (`InProcessSAPRuntime.swift`) instead of a WebKit page, after 0.6.4
+  showed WebContent exiting at spawn on Dopamine/iOS 16.1.1.
+- Add `dynamic-codesigning` to the jailbreak entitlements so JavaScriptCore
+  enables JIT/WebAssembly; fall back to WebKit if it still reports none.
+- Native shims for URL, fetch (loopback only), timers, TextEncoder/Decoder,
+  crypto and script loading; CI test runs them in a bare JavaScript realm.
+- Stop cold WebKit attempts as soon as WebContent exits during attach.
+- Backend Report names the active runtime; release assets carry build 18.
+- Device sign-in on iOS 16.1.1 remains unverified until tested.
+
 ## [v0.6.4] - 2026-11-18
 
 - Keep the SAP/WASM WebKit view visibly attached at 140pt height instead of

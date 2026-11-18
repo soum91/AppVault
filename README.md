@@ -1,3 +1,7 @@
+## In-process signer for the rootless DEB (0.6.5)
+
+The rootless jailbreak DEB no longer uses WebKit for Apple sign-in. On Dopamine/iOS 16.1.1 the WebContent process exited as soon as it was spawned, so 0.6.5 runs the same pinned, hash-verified SAP runtime in an in-process JavaScriptCore context, enabled by the DEB's new `dynamic-codesigning` entitlement. If JavaScriptCore reports no WebAssembly, AppVault falls back to WebKit. Settings > Backend Report shows which runtime is active. The sideloaded IPA is unchanged. Physical-device sign-in remains unverified.
+
 ## iOS 16 WebKit local authentication runtime (0.6.4)
 
 The local SAP/WASM signer now uses an actually attached, visible WebKit view during login rather than a translucent 1×1 view. Memory warnings no longer deliberately reset the listener while a signing operation is active. AppVault > Settings > Backend Report includes bounded, credentials-free runtime stage markers and a specific `WEB_CONTENT_EXIT` flag when WebKit terminates.
