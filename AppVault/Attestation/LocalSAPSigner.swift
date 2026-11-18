@@ -55,7 +55,7 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             }
     }
 
-    func sign(_ data: Data, guid: String, useCache: Bool, cacheSignature: Bool = true) async throws -> String {
+    func sign(_ data: Data, guid: String, useCache: Bool, cacheSignature: Bool = true, progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> String {
         let key = guid + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         try Task.checkCancellation()
         if useCache, cacheSignature, let cached = signatureCache[key] { return cached }
@@ -65,7 +65,7 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             await sapInitialize(guid, {proxyURL: proxy});
             try { reportStage(2); return await sapSign(body); }
             finally { await sapClose(); }
-            """, arguments: ["guid": guid, "body": data.base64EncodedString()], reuseRuntime: useCache)
+            """, arguments: ["guid": guid, "body": data.base64EncodedString()], reuseRuntime: useCache, progress: progress)
         if useCache, cacheSignature, revision == cacheRevision {
             if signatureCache.count >= 128 { signatureCache.removeAll() }
             signatureCache[key] = result
@@ -203,28 +203,28 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
 
     private enum RuntimeRetry: Error { case coldStart }
 
-    func execute(title: String, script: String, arguments: [String: Any], timeoutSeconds: UInt64 = 180, reuseRuntime: Bool = true) async throws -> String {
+    func execute(title: String, script: String, arguments: [String: Any], timeoutSeconds: UInt64 = 180, reuseRuntime: Bool = true, progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> String {
         do {
-            return try await executeAttempt(title: title, script: script, arguments: arguments, timeoutSeconds: timeoutSeconds, reuseRuntime: reuseRuntime)
+            return try await executeAttempt(title: title, script: script, arguments: arguments, timeoutSeconds: timeoutSeconds, reuseRuntime: reuseRuntime, progress: progress)
         } catch {
             // executeAttempt's defer must release the operation before a retry
             // can acquire it. Retrying inside that attempt deadlocks on itself.
             try Task.checkCancellation()
             if error is RuntimeRetry {
-                return try await executeAttempt(title: title, script: script, arguments: arguments, timeoutSeconds: timeoutSeconds, reuseRuntime: false)
+                return try await executeAttempt(title: title, script: script, arguments: arguments, timeoutSeconds: timeoutSeconds, reuseRuntime: false, progress: progress)
             }
             let ns = error as NSError
             if ns.domain == NSURLErrorDomain && (ns.code == NSURLErrorCannotConnectToHost || ns.code == NSURLErrorNetworkConnectionLost) {
                 InstallLog.shared.add("SAPSigner loopback error (\(ns.code)), resetting server and retrying")
                 await server.reset()
                 discardIdleRuntime()
-                return try await executeAttempt(title: title, script: script, arguments: arguments, timeoutSeconds: timeoutSeconds, reuseRuntime: false)
+                return try await executeAttempt(title: title, script: script, arguments: arguments, timeoutSeconds: timeoutSeconds, reuseRuntime: false, progress: progress)
             }
             throw error
         }
     }
 
-    private func executeAttempt(title: String, script: String, arguments: [String: Any], timeoutSeconds: UInt64 = 180, reuseRuntime: Bool = true) async throws -> String {
+    private func executeAttempt(title: String, script: String, arguments: [String: Any], timeoutSeconds: UInt64 = 180, reuseRuntime: Bool = true, progress: @escaping @Sendable (String) -> Void) async throws -> String {
         // One operation at a time: wait for the current one (for example a
         // background purchase sync) instead of failing the user's action.
         // Waiting in a queue, not polling: a busy background loop must not
@@ -238,7 +238,10 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         defer { release(id: id, reuse: reuseRuntime && succeeded && cacheRevision == revision) }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
-            try await RuntimeAssets.prepare()
+            progress("Preparing local authentication runtime")
+            try await RuntimeAssets.prepare(progress: progress)
+            try Task.checkCancellation()
+            progress("Starting local signing service")
             try await server.start()
             try checkActive(id)
             guard let base = server.baseURL else { throw ToolError.message(AppText.text("暂时无法完成验证，请重试")) }
@@ -257,6 +260,7 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             webView = web; isPresented = true
             if !warm {
                 armTimeout(id: id, seconds: 45, message: AppText.text("本地验证环境加载超时，请重试。"))
+                progress("Loading local authentication page")
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                     navigation = continuation
                     web.load(URLRequest(url: base.appendingPathComponent("runtime/index.html")))
@@ -266,6 +270,7 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             }
             try checkActive(id)
             armTimeout(id: id, seconds: timeoutSeconds, message: AppText.text("验证已超过 3 分钟，已停止本次操作。请保持应用在前台后重试。"))
+            progress("Signing Apple authentication request")
             var values = arguments
             values["proxy"] = base.appendingPathComponent("proxy").absoluteString
             let result: String

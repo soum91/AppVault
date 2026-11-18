@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.6.1] - 2026-11-18
+
+- Surface Apple sign-in stages and seven runtime asset download/verification steps in the progress banner.
+- Bound pinned authentication component network waits and preserve checksum validation.
+- Include the stage of a failed sign-in in the Backend Report to diagnose device-specific stalls.
+- No claim of verified Dopamine login, IPA download or FairPlay decryption.
+
+
 ## [v0.6.0] - 2026-11-18
 
 ## Verified changes since v0.5.0

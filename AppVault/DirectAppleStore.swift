@@ -158,7 +158,7 @@ actor DirectAppleStore {
         }
         return (data, response)
     }
-    func login(email: String, password: String, code: String) async throws {
+    func login(email: String, password: String, code: String, progress: @escaping @Sendable (String) -> Void = { _ in }) async throws {
         guard code.isEmpty || (code.count == 6 && code.allSatisfy({ $0.isASCII && $0.isNumber })) else {
             throw StoreProtocol.failure("invalid_code", "Enter a six-digit verification code.")
         }
@@ -169,6 +169,7 @@ actor DirectAppleStore {
             _ = try await verificationRequest(context.request(code: code), stage: "trusted_device_code")
             sessionVerified = true
         }
+        progress("Contacting Apple Store authentication")
         let (bagData, bagResponse) = try await request(URL(string: "https://init.itunes.apple.com/bag.xml?guid=\(guid)&ix=6")!)
         let bag = try StoreProtocol.dictionary(bagData, status: bagResponse.statusCode)
         let urls = bag["urlBag"] as? [String: Any] ?? bag
@@ -181,8 +182,11 @@ actor DirectAppleStore {
         var items = components.queryItems ?? []; items.removeAll { $0.name == "guid" }; items.append(URLQueryItem(name: "guid", value: guid)); components.queryItems = items
         let body = try StoreProtocol.loginBody(email: email, password: password, code: sessionVerified ? "" : code, guid: guid)
         let signer = await LocalSAPSigner.shared
-        let signature = try await signer.sign(body, guid: guid, useCache: true, cacheSignature: false)
+        progress("Preparing signed Apple request")
+        let signature = try await signer.sign(body, guid: guid, useCache: true, cacheSignature: false, progress: progress)
+        progress("Requesting Apple Store session")
         let (data, response) = try await attested(components.url!, body: body, signature: signature)
+        progress("Processing Apple Store response")
         let challengeFields = StoreProtocol.responseFields(data) ?? [:]
         if AppleVerificationSession.isChallengeResponse(challengeFields, response: response), let context = AppleVerificationSession.from(response) {
             verification = context; verificationEmail = email

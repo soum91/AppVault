@@ -90,7 +90,9 @@ enum VaultKeychain {
         catch { fail(error); return }
         let email = self.email, password = self.password, code = self.code
         run("Signing in directly with Apple") { client in
-            try await client.login(email: email, password: password, code: code)
+            try await client.login(email: email, password: password, code: code) { [weak self] phase in
+                Task { @MainActor in if self?.busy == true { self?.status = phase } }
+            }
         }
     }
     func requestApproval() {
@@ -178,7 +180,10 @@ enum VaultKeychain {
                 message = "The operation failed (\(issue.domain), code \(issue.code)). Review the Backend Report for the failing stage."
             }
         }
-        lastFailure = message; error = message; status = "Failed"
+        let failedAt = status
+        lastFailure = "Stage: \(failedAt). \(message)"
+        error = message
+        status = "Failed"
     }
     private func endBackgroundTask() {
         if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask); backgroundTask = .invalid }

@@ -1,3 +1,11 @@
+## Authentication stage diagnostics (0.6.1)
+
+When the Apple Account sign-in waits, AppVault shows the current authentication
+phase and progress through its seven pinned runtime components. Runtime network
+requests have explicit timeouts. On failure, use Settings > Backend Report for
+the failing stage. These changes do not establish a successful login on a
+physical iOS 16 device; do not repeatedly submit credentials when a stage stalls.
+
 ## Stock iOS helper workflow (0.6.0)
 
 Prepare a per-app helper in **IPAs > Decrypt on Stock iOS**, sign/install with payload-preserving EmberSign, then open the helper to export. Requires the matching device App Store account/license and Developer Mode. Physical-device signing and decryption remain unverified. See [STOCK_DECRYPTION.md](STOCK_DECRYPTION.md).
