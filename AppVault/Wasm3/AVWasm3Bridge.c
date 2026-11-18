@@ -6,12 +6,18 @@
 #include <string.h>
 #include <stdlib.h>
 
+typedef struct AVWasm3Wrapper {
+    struct AVWasm3Wrapper* next;
+    uint8_t bytes[];
+} AVWasm3Wrapper;
+
 struct AVWasm3Instance {
     IM3Environment env;
     IM3Runtime     runtime;
     IM3Module      module;
     AVWasm3ImportCallback callback;
     void* userdata;
+    AVWasm3Wrapper* wrappers;
     uint8_t*       wasmCopy; // persistent copy of WASM bytes
 };
 
@@ -195,11 +201,81 @@ AVWasm3FuncRef AVWasm3TableFunction(AVWasm3InstanceRef instance, uint32_t index)
     return m3_GetTableFunction(&function, instance->module, index) ? NULL : function;
 }
 
+static IM3Table firstTable(AVWasm3InstanceRef instance) {
+    return instance->module->numTables ? instance->module->tables[0] : NULL;
+}
+
+int32_t AVWasm3TableLength(AVWasm3InstanceRef instance) {
+    IM3Table table = firstTable(instance);
+    return table ? (int32_t)table->size : -1;
+}
+
+int AVWasm3TableHasFunction(AVWasm3InstanceRef instance, uint32_t index) {
+    IM3Table table = firstTable(instance);
+    return table && index < table->size && table->elements[index] != NULL;
+}
+
+int32_t AVWasm3TableGrow(AVWasm3InstanceRef instance, uint32_t delta) {
+    IM3Table table = firstTable(instance);
+    if (!table) return -1;
+    uint32_t old = table->size;
+    uint32_t max = table->maxSize ? table->maxSize : 65536;
+    if (old > max || delta > max - old) return -1;
+    if (!delta) return (int32_t)old;
+    void** elements = m3_ReallocArray(void*, table->elements, old + delta, old);
+    if (!elements) return -1;
+    memset(elements + old, 0, delta * sizeof(*elements));
+    table->elements = elements;
+    table->size = old + delta;
+    instance->runtime->tableElementsUsed += delta;
+    return (int32_t)old;
+}
+
+const char* AVWasm3TableSet(AVWasm3InstanceRef instance, uint32_t index,
+                           const uint8_t* wrapper, uint32_t length, int32_t callbackID) {
+    IM3Table table = firstTable(instance);
+    if (!table || index >= table->size) return "WASM table index out of range";
+    if (!wrapper) {
+        table->elements[index] = NULL;
+        return NULL;
+    }
+    // Emscripten wraps a JS callback as a tiny WASM module that re-exports e.f.
+    // Load it into the caller's runtime so call_indirect can use its own stack.
+    if (!length || length > 4096) return "invalid WASM callback wrapper";
+    AVWasm3Wrapper* storage = malloc(sizeof(*storage) + length);
+    if (!storage) return "cannot allocate WASM callback wrapper";
+    memcpy(storage->bytes, wrapper, length);
+    IM3Module module = NULL;
+    M3Result error = m3_ParseModule(instance->env, &module, storage->bytes, length);
+    if (error) {
+        free(storage);
+        return error;
+    }
+    storage->next = instance->wrappers;
+    instance->wrappers = storage;
+    error = m3_LoadModule(instance->runtime, module);
+    if (error) return error;
+    error = m3_LinkRawFunctionEx(module, "e", "f", NULL, avGenericTrampoline, (void*)(intptr_t)callbackID);
+    if (error) return error;
+    IM3Function function = NULL;
+    error = m3_FindFunctionIn(&function, module, "f");
+    if (error) return error;
+    table->elements[index] = function;
+    return NULL;
+}
+
 // --- Memory ---
 
 uint8_t* AVWasm3GetMemory(AVWasm3InstanceRef inst, size_t* outSize) {
     if (!inst || !inst->module) return NULL;
     return m3_GetMemory(inst->module, outSize, 0);
+}
+
+int32_t AVWasm3GrowMemory(AVWasm3InstanceRef inst, uint32_t delta) {
+    IM3Memory memory = inst->module->memory0;
+    if (!memory || memory->numPages > UINT32_MAX - delta) return -1;
+    uint32_t old = (uint32_t)memory->numPages;
+    return ResizeMemory(inst->runtime, memory, (uint64_t)old + delta) ? -1 : (int32_t)old;
 }
 
 // --- Cleanup ---
@@ -209,5 +285,10 @@ void AVWasm3Destroy(AVWasm3InstanceRef inst) {
     if (inst->runtime) m3_FreeRuntime(inst->runtime);
     if (inst->env) m3_FreeEnvironment(inst->env);
     free(inst->wasmCopy);
+    while (inst->wrappers) {
+        AVWasm3Wrapper* wrapper = inst->wrappers;
+        inst->wrappers = wrapper->next;
+        free(wrapper);
+    }
     free(inst);
 }

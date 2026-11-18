@@ -15,12 +15,14 @@ final class Wasm3Polyfill {
     private var imports: [Int32: JSValue] = [:]
     private var functions: [Int: [String: AVWasm3FuncRef]] = [:]
     private var buffers: [Int: (size: Int, value: JSValue)] = [:]
+    private var thrownImport: JSValue?
     private var nextInstance = 1
     private var nextImport: Int32 = 1
 
     init(context: JSContext) { self.context = context }
 
     func close() {
+        thrownImport = nil
         imports.removeAll()
         functions.removeAll()
         buffers.removeAll()
@@ -30,7 +32,9 @@ final class Wasm3Polyfill {
     private static func encoded(_ value: JSValue?, as type: Int32) -> UInt64 {
         switch type {
         case 1: return UInt64(UInt32(bitPattern: value?.toInt32() ?? 0))
-        case 2: return UInt64(bitPattern: Int64(value?.toString() ?? "") ?? 0)
+        case 2:
+            let text = value?.toString() ?? ""
+            return UInt64(text) ?? UInt64(bitPattern: Int64(text) ?? 0)
         case 3: return UInt64(Float(value?.toDouble() ?? .nan).bitPattern)
         case 4: return (value?.toDouble() ?? .nan).bitPattern
         default: return 0
@@ -59,9 +63,13 @@ final class Wasm3Polyfill {
             values.append(decoded(args?[Int(index)] ?? 0, as: type))
         }
         let returnType = AVWasm3RetType(function)
-        let value = callback.call(withArguments: [types, values, returnType])
-        guard context.exception == nil else { return 0 }
-        result?.pointee = encoded(value, as: returnType)
+        let outcome = callback.call(withArguments: [types, values, returnType])
+        guard context.exception == nil, let outcome else { return 0 }
+        guard outcome.forProperty("ok")?.toBool() == true else {
+            bridge.thrownImport = outcome.forProperty("error")
+            return 0
+        }
+        result?.pointee = encoded(outcome.forProperty("value"), as: returnType)
         return 1
     }
 
@@ -144,6 +152,13 @@ final class Wasm3Polyfill {
             }
             var result: Int64 = 0
             if let error = AVWasm3CallFunc(function, count, &values, returns, &result) {
+                if let reason = self.thrownImport {
+                    self.thrownImport = nil
+                    let thrown = JSValue(newArrayIn: context)!
+                    thrown.setValue(reason, at: 0)
+                    thrown.setValue(-1, at: 1)
+                    return thrown
+                }
                 return fail(String(cString: error))
             }
             if returns == 0 { return JSValue(undefinedIn: context) }
@@ -171,22 +186,65 @@ final class Wasm3Polyfill {
             return value
         }
         context.setObject(memory, forKeyedSubscript: "__avW3Memory" as NSString)
+        let controls: @convention(block) (Int, String, UInt32) -> Int32 = { [weak self] id, command, value in
+            guard let handle = self?.instances[id]?.handle else { return -1 }
+            switch command {
+            case "memoryGrow": return AVWasm3GrowMemory(handle, value)
+            case "tableLength": return AVWasm3TableLength(handle)
+            case "tableGrow": return AVWasm3TableGrow(handle, value)
+            case "tableHas": return AVWasm3TableHasFunction(handle, value)
+            default: return -1
+            }
+        }
+        context.setObject(controls, forKeyedSubscript: "__avW3Control" as NSString)
+
+        let tableSet: @convention(block) (Int, UInt32, JSValue, JSValue) -> Bool = { [weak self] id, slot, bytes, callback in
+            guard let self, let context = self.context, let handle = self.instances[id]?.handle else { return false }
+            let error: UnsafePointer<CChar>?
+            if bytes.isNull {
+                error = AVWasm3TableSet(handle, slot, nil, 0, 0)
+            } else {
+                let global = context.jsGlobalContextRef!
+                guard let raw = bytes.jsValueRef, let object = JSValueToObject(global, raw, nil) else { return false }
+                let length = JSObjectGetArrayBufferByteLength(global, object, nil)
+                guard length > 0, length <= 4096, let address = JSObjectGetArrayBufferBytesPtr(global, object, nil) else { return false }
+                let callbackID = self.nextImport
+                self.nextImport += 1
+                self.imports[callbackID] = callback
+                error = AVWasm3TableSet(handle, slot, address.assumingMemoryBound(to: UInt8.self), UInt32(length), callbackID)
+                if error != nil { self.imports.removeValue(forKey: callbackID) }
+            }
+            self.functions[id]?.removeValue(forKey: "#\(slot)")
+            if let error {
+                context.exception = JSValue(newErrorFromMessage: String(cString: error), in: context)
+                return false
+            }
+            return true
+        }
+        context.setObject(tableSet, forKeyedSubscript: "__avW3TableSet" as NSString)
         context.evaluateScript(Self.script, withSourceURL: URL(string: "appvault://wasm3-polyfill.js"))
     }
 
     static let script = #"""
 (function (root) {
   "use strict";
+  const wrap = func => (types, args, result) => {
+    try {
+      const value = func(...args.map((arg, i) => types[i] === 2 ? BigInt(arg) : arg));
+      return {ok: true, value: result === 2 ? String(value) : value};
+    } catch (error) {
+      // Emscripten catches a JS object to resume its setjmp/longjmp path.
+      return {ok: false, error};
+    }
+  };
+  const callbackWrapper = Symbol();
   const importList = modules => {
     const names = [], wrapped = [];
     for (const [module, values] of Object.entries(modules || {})) {
       for (const [name, func] of Object.entries(values)) {
         if (typeof func !== "function") continue;
         names.push([module, name]);
-        wrapped.push((types, args, result) => {
-          const value = func(...args.map((arg, i) => types[i] === 2 ? BigInt(arg) : arg));
-          return result === 2 ? String(value) : value;
-        });
+        wrapped.push(wrap(func));
       }
     }
     return {names, wrapped};
@@ -197,17 +255,58 @@ final class Wasm3Polyfill {
       : bytes;
   }
   function Instance(module, imports) {
+    if (module.bytes.byteLength <= 4096 && typeof imports?.e?.f === "function") {
+      const callback = imports.e.f;
+      const func = (...args) => callback(...args);
+      func[callbackWrapper] = {bytes: module.bytes, callback: wrap(callback)};
+      this.exports = {f: func};
+      return;
+    }
     const id = root.__avW3Create(module.bytes, importList(imports));
     if (id < 1) throw new Error("WebAssembly interpreter could not instantiate module");
     const callable = (name, index = -1) => (...args) => {
       const result = root.__avW3Call(id, name, index, args.map(arg => typeof arg === "bigint" ? String(arg) : arg));
-      return !result ? undefined : result[1] === 2 ? BigInt(result[0]) : result[0];
+      if (!result) return undefined;
+      if (result[1] === -1) throw result[0];
+      return result[1] === 2 ? BigInt(result[0]) : result[0];
     };
     this.exports = {};
     for (const {name, kind} of root.__avW3Exports(id)) {
       if (kind === 0) this.exports[name] = callable(name);
-      else if (kind === 1) this.exports[name] = {get: slot => callable("", slot)};
-      else if (kind === 2) this.exports[name] = {get buffer() {return root.__avW3Memory(id);}};
+      else if (kind === 1) {
+        const entries = new Map();
+        this.exports[name] = {
+          get length() { return root.__avW3Control(id, "tableLength", 0); },
+          get(index) {
+            if (!entries.has(index) && root.__avW3Control(id, "tableHas", index) === 1) {
+              entries.set(index, callable("", index));
+            }
+            return entries.get(index) || null;
+          },
+          grow(delta) {
+            const old = root.__avW3Control(id, "tableGrow", delta);
+            if (old < 0) throw new RangeError("Cannot grow WASM table");
+            return old;
+          },
+          set(index, func) {
+            const record = func?.[callbackWrapper];
+            if (func !== null && !record) throw new TypeError("WASM callback wrapper required");
+            if (!root.__avW3TableSet(id, index, record?.bytes ?? null, record?.callback ?? null)) {
+              throw new RangeError("Cannot update WASM table");
+            }
+            entries.set(index, func);
+          }
+        };
+      } else if (kind === 2) {
+        this.exports[name] = {
+          get buffer() { return root.__avW3Memory(id); },
+          grow(delta) {
+            const old = root.__avW3Control(id, "memoryGrow", delta);
+            if (old < 0) throw new RangeError("Cannot grow WASM memory");
+            return old;
+          }
+        };
+      }
       else throw new Error("Unsupported WebAssembly export kind: " + kind);
     }
   }

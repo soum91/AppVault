@@ -59,11 +59,18 @@ const char* AVWasm3CallFunc(AVWasm3FuncRef func,
                              uint32_t argc, const int64_t* argv,
                              uint32_t retc, int64_t* retv);
 
+int32_t AVWasm3TableLength(AVWasm3InstanceRef instance);
+int32_t AVWasm3TableGrow(AVWasm3InstanceRef instance, uint32_t delta);
+int AVWasm3TableHasFunction(AVWasm3InstanceRef instance, uint32_t index);
+const char* AVWasm3TableSet(AVWasm3InstanceRef instance, uint32_t index,
+                           const uint8_t* wrapper, uint32_t length, int32_t callbackID);
+
 // --- Memory ---
 
 /// Get the linear memory base pointer and current size in bytes.
 /// Returns NULL if the module has no memory.
 uint8_t* AVWasm3GetMemory(AVWasm3InstanceRef inst, size_t* outSize);
+int32_t AVWasm3GrowMemory(AVWasm3InstanceRef inst, uint32_t delta);
 
 // --- Lifecycle ---
 

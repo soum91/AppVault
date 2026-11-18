@@ -17,7 +17,7 @@
 #endif
 
 #ifndef d_m3MaxFunctionStackHeight
-#  define d_m3MaxFunctionStackHeight           8000    // max: 32768
+#  define d_m3MaxFunctionStackHeight           30000   // AppVault: Go signer has large functions
 #endif
 
 #ifndef d_m3MaxLinearMemoryPages
