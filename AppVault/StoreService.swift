@@ -171,6 +171,11 @@ enum VaultKeychain {
             message = storage.localizedDescription
         } else if let failure = problem as? StoreFailure {
             message = failure.localizedDescription
+        } else if let tool = problem as? ToolError {
+            // ToolError contains our own localized, user-safe runtime message.
+            // Bridging it to NSError yields AppVaultToolError code 0, which loses
+            // the actual diagnosis if we display only the domain and code.
+            message = tool.localizedDescription
         } else {
             let issue = problem as NSError
             // Do not include arbitrary server bodies, URLs or account fields.

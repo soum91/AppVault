@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.6.2] - 2026-11-18
+
+- Display locally produced `ToolError` descriptions instead of dropping them and showing `AppVaultToolError code 0`.
+- Preserve numeric local WebKit signer failures without leaking JavaScript exceptions, URLs or account secrets.
+- Clarify empty local-signing results and missing loopback address in English.
+- Actual iOS 16 Apple Account login remains unverified on device.
+
+
 ## [v0.6.1] - 2026-11-18
 
 - Surface Apple sign-in stages and seven runtime asset download/verification steps in the progress banner.

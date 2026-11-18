@@ -299,7 +299,12 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
                     discardIdleRuntime()
                     throw RuntimeRetry.coldStart
                 }
-                throw ToolError.message(AppText.text("验证未完成，请检查网络后重试"))
+                // Preserve the underlying error code without disclosing the
+                // contents of JavaScript exceptions or account information.
+                let issue = error as NSError
+                if let runtime = error as? ToolError { throw runtime }
+                let domain = issue.domain == "WKErrorDomain" ? "WebKit" : "local signer"
+                throw ToolError.message("Local Apple signing failed (\(domain) code \(issue.code)). Check the authentication stage in Settings > Backend Report.")
             }
             try checkActive(id)
             succeeded = true

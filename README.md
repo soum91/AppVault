@@ -1,3 +1,7 @@
+## Authentication failure visibility (0.6.2)
+
+AppVault now displays its own localized tool errors instead of `AppVaultToolError code 0` and safely labels the failing local signer/WebKit code. Use **Settings > Backend Report** to inspect the last stage without publishing your Apple Account credentials. This improves diagnosis, not Apple authentication compatibility itself.
+
 ## Authentication stage diagnostics (0.6.1)
 
 When the Apple Account sign-in waits, AppVault shows the current authentication
