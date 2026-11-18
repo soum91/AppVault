@@ -254,3 +254,12 @@ Limitations: compilation and archive metadata can be verified by CI. App-contain
 
 ## 0.2.0 (3)
 - Integrated worse_query, pathleak, folder browsing and backup export.
+
+
+## [Unreleased] Rootless AppVault storage correction
+
+- Rootless AppVault now uses a mobile-owned persistent data directory for its local Apple request signing runtime and IPA exports instead of depending on a sandbox data-container URL.
+- Rootless post-install script provisions protected authentication, temporary, and export directories. Preflight detects unwritable storage before accepting Apple credentials.
+- Report `NSCocoaErrorDomain 513` as a filesystem permission failure, not an Apple login/network failure.
+- Share a writable temp workspace with the installed-app decryption and stock helper preparation flows without relaxing authorization or FairPlay checks.
+- Preserve nested SINF license resources via independent writes. Actual on-device login and decryption remain unverified.
