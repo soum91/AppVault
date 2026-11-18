@@ -9,13 +9,13 @@ struct IPAExportFailure: LocalizedError {
 /// Read-only source may be an installed user app or resources embedded in our own helper.
 enum IPAExportEngine {
     static func export(source: URL, appName: String, identifier: String, folder: URL,
-                       progress: (String) -> Void) throws -> URL {
+                       workspace: URL? = nil, progress: (String) -> Void) throws -> URL {
         let fm = FileManager.default
         guard appName.hasSuffix(".app"), HelperPaths.safe(appName), !appName.contains("/"),
               HelperPaths.safe(identifier), !identifier.contains("/") else {
             throw IPAExportFailure(message: "Invalid output bundle name")
         }
-        let work = fm.temporaryDirectory.appendingPathComponent("export-" + UUID().uuidString)
+        let work = (workspace ?? fm.temporaryDirectory).appendingPathComponent("export-" + UUID().uuidString)
         var attempted: URL?
         defer { try? fm.removeItem(at: work) }
         do {
