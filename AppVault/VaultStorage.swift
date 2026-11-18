@@ -3,7 +3,15 @@ import Foundation
 /// Rootless apps installed under /var/jb/Applications may not receive a
 /// writable app-data container when launched without a sandbox.
 enum VaultStorage {
-    static var isRootless: Bool { AVHasDecryptionPrivileges() }
+    static var isRootless: Bool {
+        // An incorrectly signed rootless installation still needs a writable
+        // data path, even if the privilege probe returns false.
+        let installed = Bundle.main.bundleURL.path
+        let resolved = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+        return AVHasDecryptionPrivileges() ||
+            installed.hasPrefix("/var/jb/Applications/") ||
+            (resolved.contains("/preboot/") && resolved.contains("/Applications/AppVault.app"))
+    }
     static var base: URL {
         if isRootless {
             return URL(fileURLWithPath: "/var/mobile/Library/Application Support/com.soum91.appvault", isDirectory: true)
