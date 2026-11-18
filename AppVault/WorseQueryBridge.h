@@ -9,6 +9,7 @@ void AVDiscoveryCancel(void);
 NSString * _Nonnull AVDiscoveryStatus(void);
 NSString * _Nonnull AVDiscoveryLog(void);
 #import "Decryption/MachODecrypt.h"
+#import "Wasm3/AVWasm3Bridge.h"
 BOOL AVHasDecryptionPrivileges(void);
 pid_t AVSpawnSigner(NSString * _Nonnull path, NSArray<NSString *> * _Nonnull arguments, int * _Nonnull writeFD, int * _Nonnull readFD);
 void AVStopSigner(pid_t pid);

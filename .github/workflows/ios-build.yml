@@ -74,11 +74,26 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/AppVault.app Payload/
           ldid -SAppVault/AppVault.entitlements Payload/AppVault.app/AppVault
           cp AppVault/AppVault.entitlements Payload/AppVault.app/archived-expanded-entitlements.xcent
-          zip -qry AppVault-0.7.0-23.ipa Payload
+          zip -qry AppVault-0.7.1-24.ipa Payload
       - name: Build rootless signer helper (JavaScriptCore outside the UI process)
         run: |
+          # Compile wasm3 C sources into object files
+          WASM3_DIR=AppVault/Wasm3
+          WASM3_OBJS=""
+          for f in "$WASM3_DIR"/*.c; do
+            obj="build/wasm3-$(basename "$f" .c).o"
+            xcrun -sdk iphoneos clang -target arm64-apple-ios16.0 -O2 -std=gnu11 \
+              -Wno-shorten-64-to-32 -Wno-sign-conversion -Wno-unused-function -Wno-comma \
+              -I"$WASM3_DIR" -c "$f" -o "$obj"
+            WASM3_OBJS="$WASM3_OBJS $obj"
+          done
+          # Build Swift signer helper with wasm3 polyfill
           xcrun -sdk iphoneos swiftc -target arm64-apple-ios16.0 -O -swift-version 5 -module-name AppVaultSigner \
-            SignerHelper/main.swift SignerHelper/Support.swift AppVault/Attestation/InProcessSAPRuntime.swift \
+            SignerHelper/main.swift SignerHelper/Support.swift \
+            AppVault/Attestation/InProcessSAPRuntime.swift \
+            AppVault/Attestation/Wasm3Polyfill.swift \
+            -import-objc-header AppVault/Wasm3/AVWasm3Bridge.h \
+            $WASM3_OBJS \
             -o build/appvault-signer
           otool -L build/appvault-signer | grep -q JavaScriptCore.framework
           if otool -L build/appvault-signer | grep -q UIKit.framework; then echo "appvault-signer must not link UIKit"; exit 1; fi
@@ -93,20 +108,20 @@ jobs:
           chmod 755 rootless/DEBIAN/postinst rootless/DEBIAN/postrm
           ldid -Spackaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVault.app/AppVault
           cp packaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVault.app/archived-expanded-entitlements.xcent
-          dpkg-deb --root-owner-group -Zgzip --build rootless AppVault-0.7.0-23-rootless.deb
-          dpkg-deb --info AppVault-0.7.0-23-rootless.deb
+          dpkg-deb --root-owner-group -Zgzip --build rootless AppVault-0.7.1-24-rootless.deb
+          dpkg-deb --info AppVault-0.7.1-24-rootless.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-0.7.0-ipa
+          name: AppVault-0.7.1-ipa
           path: |
-            AppVault-0.7.0-23.ipa
-            AppVault-0.7.0-23-rootless.deb
+            AppVault-0.7.1-24.ipa
+            AppVault-0.7.1-24-rootless.deb
       - name: Publish experimental native client
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.7.0 >/dev/null 2>&1; then
-            gh release create v0.7.0 AppVault-0.7.0-23.ipa AppVault-0.7.0-23-rootless.deb --target "$GITHUB_SHA" --title "AppVault 0.7.0 (23) - out-of-process JavaScriptCore signer for the rootless DEB" --prerelease --notes-file RELEASE_NOTES.md
+          if ! gh release view v0.7.1 >/dev/null 2>&1; then
+            gh release create v0.7.1 AppVault-0.7.1-24.ipa AppVault-0.7.1-24-rootless.deb --target "$GITHUB_SHA" --title "AppVault 0.7.1 (24) - wasm3 interpreter polyfill for rootless DEB login" --prerelease --notes-file RELEASE_NOTES.md
           fi
       - name: Refresh FlareStore source
         env:
@@ -120,13 +135,13 @@ jobs:
           data=json.loads(base64.b64decode(latest['content']))
           app=next(a for a in data['apps'] if a.get('bundleIdentifier')=='com.soum91.appvault')
           description='Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.'
-          url='https://github.com/'+repo+'/releases/download/v0.7.0/AppVault-0.7.0-23.ipa'
+          url='https://github.com/'+repo+'/releases/download/v0.7.1/AppVault-0.7.1-24.ipa'
           date=datetime.now(timezone.utc).strftime('%Y-%m-%d')
           app['subtitle']='IPA downloads and stock decryption helpers'
-          app.update(version='0.7.0',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.7.0-23.ipa'),localizedDescription=description)
-          app['versions']=[{'version':'0.7.0','buildVersion':'23','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
+          app.update(version='0.7.1',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.7.1-24.ipa'),localizedDescription=description)
+          app['versions']=[{'version':'0.7.1','buildVersion':'24','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
           data['description']=description
-          payload={'message':'Update FlareStore source for native AppVault 0.7.0 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          payload={'message':'Update FlareStore source for native AppVault 0.7.1 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
           open('feed-request.json','w').write(json.dumps(payload))
           subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
           PY

@@ -146,8 +146,18 @@ final class InProcessSAPRuntime: @unchecked Sendable {
             context.exception = nil
             throw ToolError.message("Local signer shims failed to load (\(Self.safeDescription(exception))).")
         }
-        let wasm = context.evaluateScript("typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function'")
-        guard wasm?.toBool() == true else { throw Failure.webAssemblyUnavailable }
+        let hasNativeWasm = context.evaluateScript("typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function'")?.toBool() == true
+        if !hasNativeWasm {
+            // Native WebAssembly is unavailable (MAP_JIT claimed by forkfix.dylib
+            // on Dopamine jailbreaks). Install the wasm3 interpreter polyfill.
+            Wasm3Polyfill.install(in: context)
+            if let exception = context.exception {
+                context.exception = nil
+                throw ToolError.message("wasm3 polyfill failed: \(Self.safeDescription(exception))")
+            }
+            let hasPolyfill = context.evaluateScript("typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function'")?.toBool() == true
+            guard hasPolyfill else { throw Failure.webAssemblyUnavailable }
+        }
         let signerURL = RuntimeAssets.directory.appendingPathComponent("sap-signer.js")
         guard let signer = try? String(contentsOf: signerURL, encoding: .utf8) else {
             throw ToolError.message("Local signer component sap-signer.js is missing; reopen AppVault and retry.")
