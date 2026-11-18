@@ -32,7 +32,10 @@ final class LocalSAPSigner: NSObject, ObservableObject {
     private var lastWebContentExit = false
     /// In-process JavaScriptCore runtime used by the rootless DEB (see
     /// InProcessSAPRuntime). Kept warm like the reusable WebKit view.
-    private var inProcessRuntime: InProcessSAPRuntime?
+    private var inProcessRuntime: (any SAPRuntimeHost)?
+    /// Out-of-process signer state (rootless DEB): see SignerHelperClient.
+    private var helperUnavailable = false
+    private var helperStatus = "not started"
     private var inProcessBase: URL?
     /// Set when JavaScriptCore has no JIT/WebAssembly in this install, so the
     /// WebKit runtime is used instead.
@@ -48,7 +51,8 @@ final class LocalSAPSigner: NSObject, ObservableObject {
         return usesInProcessRuntime ? "in-process JavaScriptCore/WASM (rootless dynamic-codesigning)" : "local WebKit/WASM"
     }
     var diagnosticSummary: String {
-        let state = "Local signer: runtime=\(runtimeDescription); stage=\(stage); index=\(stageIndex); web_content_exit=\(lastWebContentExit)"
+        let helper = SignerHelperClient.isInstalled ? helperStatus : "not installed"
+        let state = "Local signer: runtime=\(runtimeDescription); helper=\(helper); stage=\(stage); index=\(stageIndex); web_content_exit=\(lastWebContentExit)"
         return state + "\nRuntime events: " + recentEvents.joined(separator: " | ")
     }
     private func recordStage(_ label: String) {
@@ -385,7 +389,7 @@ final class LocalSAPSigner: NSObject, ObservableObject {
 
     private func executeInProcess(id: UUID, base: URL, script: String, arguments: [String: Any], timeoutSeconds: UInt64, reuseRuntime: Bool, progress: @escaping @Sendable (String) -> Void) async throws -> String {
         let warm = reuseRuntime && inProcessBase == base && inProcessRuntime?.isAlive == true
-        let runtime: InProcessSAPRuntime
+        let runtime: any SAPRuntimeHost
         if warm, let saved = inProcessRuntime {
             runtime = saved
             stage = AppText.text("复用本机验证组件")
@@ -393,10 +397,7 @@ final class LocalSAPSigner: NSObject, ObservableObject {
             discardInProcessRuntime()
             armTimeout(id: id, seconds: 45, message: AppText.text("本地验证环境加载超时，请重试。"))
             progress("Loading local authentication engine")
-            recordStage("jsc-runtime-starting")
-            runtime = try await InProcessSAPRuntime.make(serverBase: base) { index in
-                Task { @MainActor in LocalSAPSigner.shared.applyStage(index) }
-            }
+            runtime = try await makeRuntimeHost(base: base)
             guard operationID == id, terminalError == nil else { runtime.shutdown(); try checkActive(id); throw CancellationError() }
             inProcessRuntime = runtime; inProcessBase = base
             recordStage("jsc-runtime-ready")
@@ -433,6 +434,37 @@ final class LocalSAPSigner: NSObject, ObservableObject {
             if warm { throw RuntimeRetry.coldStart }
             throw error
         }
+    }
+
+    /// Prefers the out-of-process helper (rootless DEB), whose JavaScriptCore
+    /// can get JIT/WebAssembly when this UI process cannot; then in-process.
+    private func makeRuntimeHost(base: URL) async throws -> any SAPRuntimeHost {
+        let onStage: @Sendable (Int) -> Void = { index in Task { @MainActor in LocalSAPSigner.shared.applyStage(index) } }
+        if SignerHelperClient.isInstalled && !helperUnavailable {
+            recordStage("helper-starting")
+            do {
+                let helper = try await SignerHelperClient.make(serverBase: base, runtimeDirectory: RuntimeAssets.directory, onStage: onStage)
+                helperStatus = "ready" + Self.imageSummary(helper.injectedImages)
+                recordStage("helper-ready")
+                return helper
+            } catch SignerHelperClient.Failure.wasmUnavailable(let images) {
+                helperUnavailable = true
+                helperStatus = "WebAssembly unavailable" + Self.imageSummary(images)
+                recordStage("helper-wasm-unavailable")
+            } catch SignerHelperClient.Failure.failed(let reason) {
+                helperStatus = "failed (\(String(reason.prefix(160))))"
+                recordStage("helper-failed")
+            } catch {
+                helperStatus = "failed"
+                recordStage("helper-failed")
+            }
+        }
+        recordStage("jsc-runtime-starting")
+        return try await InProcessSAPRuntime.make(serverBase: base, onStage: onStage)
+    }
+
+    private static func imageSummary(_ images: [String]) -> String {
+        images.isEmpty ? "; injected=none" : "; injected=" + images.prefix(12).joined(separator: ",")
     }
 
     private func applyStage(_ index: Int) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.7.0] - 2026-11-18
+
+- Rootless DEB: run the SAP signer in a new appvault-signer helper process
+  (JavaScriptCore, no UIKit, dynamic-codesigning) because the UI process's
+  single MAP_JIT region was already taken, which disables JSC WebAssembly.
+- Helper first, then in-process JavaScriptCore, then WebKit.
+- Backend Report shows helper status and images loaded into it.
+- Remove the in-app MAP_JIT probe, which could claim the JIT region itself.
+- Device sign-in remains unverified.
+
 ## [v0.6.9] - 2026-11-18
 
 - Rootless installs set JSC_useJIT and JSC_useWebAssembly at launch so

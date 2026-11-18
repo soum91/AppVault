@@ -25,6 +25,10 @@ checks = {
     "in-process fetch limited to the loopback server": 'guard address.hasPrefix(loopbackRoot)' in inprocess and 'url.host == "127.0.0.1"' in inprocess,
     "in-process errors are sanitized": 'static func safeDescription' in inprocess and 'localizedDescription' not in inprocess,
     "report names the active runtime": 'LocalSAPSigner.shared.runtimeDescription' in service,
+    "rootless signer helper is preferred": 'SignerHelperClient.isInstalled && !helperUnavailable' in signer,
+    "signer helper links no UIKit": 'import UIKit' not in (root / "SignerHelper/main.swift").read_text() and 'must not link UIKit' in (root / ".github/workflows/ios-build.yml").read_text(),
+    "signer helper gets JIT entitlement": '<key>dynamic-codesigning</key><true/>' in (root / "packaging/AppVault-signer.entitlements").read_text(),
+    "no in-app MAP_JIT probe": 'MAP_JIT */' not in (root / "AppVault/Attestation/RuntimeProbe.swift").read_text(),
 }
 for name, good in checks.items():
     if not good:

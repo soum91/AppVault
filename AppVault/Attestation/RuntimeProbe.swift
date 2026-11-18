@@ -14,7 +14,9 @@ enum RuntimeProbe {
         lines.append("  dynamic-codesigning entitlement (runtime): \(entitlement("dynamic-codesigning"))")
         lines.append("  platform-application entitlement (runtime): \(entitlement("platform-application"))")
         lines.append("  code-signing flags: \(codeSigningFlags())")
-        lines.append("  MAP_JIT probe: \(VaultStorage.isRootless ? mapJITProbe() : "skipped (sandboxed)")")
+        // No MAP_JIT probe here: on iOS a MAP_JIT mapping claims the process's single
+        // JIT region for good, which would itself stop JavaScriptCore getting JIT.
+        lines.append("  signer helper: \(SignerHelperClient.isInstalled ? "installed" : "not installed")")
         lines.append("  JavaScriptCore: \(javaScriptCoreProbe())")
         lines.append("  JSC env: useJIT=\(environment("JSC_useJIT")) useWebAssembly=\(environment("JSC_useWebAssembly"))")
         if VaultStorage.isRootless { lines.append(contentsOf: crashReports()) }
@@ -49,20 +51,6 @@ enum RuntimeProbe {
                                          (0x10000000, "DEBUGGED")]
         let set = names.filter { flags & $0.0 != 0 }.map(\.1)
         return String(format: "0x%08x", flags) + " [" + set.joined(separator: ",") + "]"
-    }
-
-    private static func mapJITProbe() -> String {
-        let size = Int(getpagesize())
-        errno = 0
-        let pointer = mmap(nil, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | 0x0800 /* MAP_JIT */, -1, 0)
-        if pointer == nil || pointer == UnsafeMutableRawPointer(bitPattern: -1) {
-            let code = errno
-            // iOS allows one MAP_JIT region per process; EINVAL usually means
-            // JavaScriptCore already holds it.
-            return code == EINVAL ? "EINVAL (a JIT region likely already exists, e.g. JavaScriptCore's)" : "failed (errno \(code))"
-        }
-        munmap(pointer, size)
-        return "ok"
     }
 
     private static func javaScriptCoreProbe() -> String {
