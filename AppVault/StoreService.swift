@@ -57,7 +57,7 @@ enum VaultKeychain {
     private var operation: Task<Void, Never>?
     private var lastFailure = "None"
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
-    var folder: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("IPAs", isDirectory: true) }
+    var folder: URL { VaultStorage.exports.appendingPathComponent("IPAs", isDirectory: true) }
     var report: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
@@ -86,6 +86,8 @@ enum VaultKeychain {
     }
     func signIn() {
         guard !email.isEmpty, !password.isEmpty else { error = "Enter your Apple Account email and password."; return }
+        do { try VaultStorage.ensureWritable(VaultStorage.runtime, operation: "Apple Account sign-in") }
+        catch { fail(error); return }
         let email = self.email, password = self.password, code = self.code
         run("Signing in directly with Apple") { client in
             try await client.login(email: email, password: password, code: code)
@@ -109,6 +111,7 @@ enum VaultKeychain {
         guard signedIn else { error = "Sign in under Account before downloading."; return }
         let directory = folder, version = versionID.trimmingCharacters(in: .whitespacesAndNewlines)
         run("Requesting IPA") { client in
+            try VaultStorage.ensureWritable(directory, operation: "saving an IPA download")
             let url = try await client.download(app, directory: directory, versionID: version) { [weak self] phase in
                 Task { @MainActor in self?.status = phase }
             }
@@ -162,12 +165,18 @@ enum VaultKeychain {
         let message: String
         if problem is CancellationError || (problem as NSError).code == NSURLErrorCancelled {
             message = "Operation cancelled. [cancelled]"
+        } else if let storage = problem as? VaultStorageError {
+            message = storage.localizedDescription
         } else if let failure = problem as? StoreFailure {
             message = failure.localizedDescription
         } else {
             let issue = problem as NSError
             // Do not include arbitrary server bodies, URLs or account fields.
-            message = "The operation failed (\(issue.domain), code \(issue.code)). Check your network, free storage and Keychain access."
+            if issue.domain == NSCocoaErrorDomain && issue.code == NSFileWriteNoPermissionError {
+                message = "Storage write denied (NSCocoaErrorDomain 513). This is a local file permission failure, not a rejected Apple Account password. Inspect the Backend Report."
+            } else {
+                message = "The operation failed (\(issue.domain), code \(issue.code)). Review the Backend Report for the failing stage."
+            }
         }
         lastFailure = message; error = message; status = "Failed"
     }
