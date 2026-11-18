@@ -18,6 +18,7 @@
 #include "m3_host.h"
 #include "m3_exception.h"
 #include "m3_info.h"
+#include <sys/mman.h>
 
 
 IM3Environment m3_NewEnvironment ()
@@ -1129,20 +1130,20 @@ M3Result ResizeMemory (IM3Runtime io_runtime, IM3Memory memory, u64 i_numPages)
 
 #else
 
-        size_t numBytes = (size_t)numPageBytes + sizeof(M3MemoryHeader);
-
-        // What is really there, which is not numPages * pageSize: the limit above
-        // caps the bytes without capping the page count, so a memory can be short
-        // of a page - by design, since a whole 64 KiB page is often more than an
-        // MCU has. Measuring the old block by the page count would overstate it,
-        // and then realloc never sees the size it already has and copies the
-        // whole limit again on every grow past it.
-        size_t numPreviousBytes = memory->mallocated ? memory->mallocated->length + sizeof(M3MemoryHeader) : 0;
-
-        void* newMem = m3_Realloc("Wasm Linear Memory", memory->mallocated, numBytes, numPreviousBytes);
-        _throwifnull(newMem);
-
-        memory->mallocated = (M3MemoryHeader*)newMem;
+        // Keep the base address stable for the lifetime of any JS view.
+        // The interpreter continues to check accesses against the current
+        // logical length. This mapping is writable data, never executable.
+        _throwif(m3Err_memoryLimitExceeded, numPageBytes > AV_WASM_MEMORY_CAPACITY);
+        if (memory->mallocated == NULL) {
+            void* buffer = mmap(NULL, AV_WASM_MEMORY_CAPACITY + sizeof(M3MemoryHeader),
+                                PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            _throwif(m3Err_mallocFailed, buffer == MAP_FAILED);
+            memory->mallocated = (M3MemoryHeader*)buffer;
+        }
+        if (numPageBytes < oldLength) {
+            memset((u8*)(memory->mallocated + 1) + numPageBytes, 0,
+                   (size_t)(oldLength - numPageBytes));
+        }
 
 #endif
 
@@ -1179,7 +1180,10 @@ void FreeMemoryBlock (IM3Memory io_memory)
 
     io_memory->mallocated = NULL;
 #else
-    m3_Free(io_memory->mallocated);
+    if (io_memory->mallocated) {
+        munmap(io_memory->mallocated, AV_WASM_MEMORY_CAPACITY + sizeof(M3MemoryHeader));
+        io_memory->mallocated = NULL;
+    }
 #endif
 }
 

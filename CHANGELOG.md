@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 (24)
+
+- Add the interpreter fallback and exercise the two pinned signer modules before packaging. Physical iOS 16.1.1 sign-in remains unverified.
+
 ## [v0.7.0] - 2026-11-18
 
 - Rootless DEB: run the SAP signer in a new appvault-signer helper process

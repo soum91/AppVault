@@ -42,6 +42,19 @@ jobs:
           cd /tmp/appvault-runtime-source/iPadn-iOS
           python3 scripts/assemble_runtime.py
           node scripts/runtime_smoke_test.cjs
+      - name: Run the rootless signer with native WebAssembly disabled
+        env:
+          APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
+        run: |
+          mkdir -p build/host-wasm3
+          for source in AppVault/Wasm3/*.c; do
+            xcrun clang -O2 -std=gnu11 -c "$source" -o "build/host-wasm3/$(basename "$source" .c).o"
+          done
+          xcrun swiftc -O -swift-version 5 -D APPVAULT_INTERPRETER_TEST \
+            SignerHelper/main.swift SignerHelper/Support.swift \
+            AppVault/Attestation/InProcessSAPRuntime.swift AppVault/Attestation/Wasm3Polyfill.swift \
+            -import-objc-header AppVault/Wasm3/AVWasm3Bridge.h build/host-wasm3/*.o -o build/test-signer
+          python3 Tests/RuntimeUI/test_interpreted_runtime.py build/test-signer "$APPVAULT_RUNTIME"
       - name: Verify live Store device provisioning and signed authentication
         env:
           APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files

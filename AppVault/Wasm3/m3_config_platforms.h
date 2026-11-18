@@ -266,6 +266,10 @@ typedef int8_t         i8;
 #  define d_m3HasPosixHost 0
 #endif
 
+// AppVault keeps explicit bounds checks and uses stable RW storage for JS views.
+#define d_m3GuardedMemory 0
+#define AV_WASM_MEMORY_CAPACITY (256u * 1024u * 1024u)
+
 // Guarded memories ask the system to catch an access past the end of a linear memory,
 // which takes address space to reserve and a way to catch the fault.
 //

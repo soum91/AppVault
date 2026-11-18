@@ -1,415 +1,226 @@
 import Foundation
 import JavaScriptCore
 
-/// Provides a `WebAssembly` polyfill in a JSContext using wasm3 as the
-/// interpreter backend. Used when JavaScriptCore's native WebAssembly is
-/// unavailable (no JIT due to MAP_JIT being claimed by forkfix.dylib on
-/// Dopamine jailbreaks).
-///
-/// The polyfill implements the subset of the WebAssembly JS API that the
-/// Go WASM runtime (wasm_exec.js) and sap-signer.js use:
-///   - WebAssembly.instantiate(bufferSource, importObject) -> Promise
-///   - Instance with callable exports and memory access
-///   - Memory grow
-enum Wasm3Polyfill {
+/// JavaScript surface used by the two pinned signer modules when native
+/// WebAssembly is unavailable. One bridge belongs to one runtime thread.
+final class Wasm3Polyfill {
+    private final class Instance {
+        let handle: AVWasm3InstanceRef
+        init(_ handle: AVWasm3InstanceRef) { self.handle = handle }
+        deinit { AVWasm3Destroy(handle) }
+    }
 
-    // MARK: - Import trampoline state
+    private weak var context: JSContext?
+    private var instances: [Int: Instance] = [:]
+    private var imports: [Int32: JSValue] = [:]
+    private var functions: [Int: [String: AVWasm3FuncRef]] = [:]
+    private var buffers: [Int: (size: Int, value: JSValue)] = [:]
+    private var nextInstance = 1
+    private var nextImport: Int32 = 1
 
-    // Mapping of importID -> JSValue (the JS import function).
-    // Accessed only from the RuntimeThread, so no locking needed.
-    private static var importFunctions: [Int32: JSValue] = [:]
-    private static weak var activeContext: JSContext?
+    init(context: JSContext) { self.context = context }
 
-    // MARK: - C trampoline callback
+    func close() {
+        imports.removeAll()
+        functions.removeAll()
+        buffers.removeAll()
+        instances.removeAll()
+    }
 
-    /// Called by wasm3 (via AVWasm3Bridge) when a trampolined import fires.
-    /// This is a @convention(c) function so it can serve as a C function pointer.
-    private static let trampolineCallback: AVWasm3ImportCallback = {
-        (importID: Int32, argc: UInt32, argv: UnsafePointer<UInt64>?, retval: UnsafeMutablePointer<UInt64>?) in
-
-        guard let jsFunc = Wasm3Polyfill.importFunctions[importID],
-              let context = Wasm3Polyfill.activeContext else {
-            return
-        }
-
-        // Build JS argument array from the wasm3 stack values.
-        // For Go WASM, all imports are void(i32) - one i32 argument (the SP).
-        var jsArgs: [Any] = []
-        if let argv {
-            for i in 0..<Int(argc) {
-                // Arguments are i64-widened; for i32 imports, truncate to 32 bits.
-                // Go WASM uses i32 for the SP argument.
-                jsArgs.append(Int32(truncatingIfNeeded: argv[i]))
-            }
-        }
-
-        // Call the JS function. For Go WASM imports, these return void.
-        let result = jsFunc.call(withArguments: jsArgs)
-
-        // If the function returned a value and the WASM function expects one,
-        // store it in retval.
-        if let retval, let result, !result.isUndefined && !result.isNull {
-            retval.pointee = UInt64(bitPattern: result.toInt64())
+    private static func encoded(_ value: JSValue?, as type: Int32) -> UInt64 {
+        switch type {
+        case 1: return UInt64(UInt32(bitPattern: value?.toInt32() ?? 0))
+        case 2: return UInt64(bitPattern: Int64(value?.toString() ?? "") ?? 0)
+        case 3: return UInt64(Float(value?.toDouble() ?? .nan).bitPattern)
+        case 4: return (value?.toDouble() ?? .nan).bitPattern
+        default: return 0
         }
     }
 
-    // MARK: - Install
+    private static func decoded(_ bits: UInt64, as type: Int32) -> Any {
+        switch type {
+        case 1: return Int32(truncatingIfNeeded: bits)
+        case 2: return String(Int64(bitPattern: bits))
+        case 3: return Double(Float(bitPattern: UInt32(truncatingIfNeeded: bits)))
+        case 4: return Double(bitPattern: bits)
+        default: return NSNull()
+        }
+    }
 
-    /// Install the WebAssembly polyfill into the given context.
-    /// Must be called on the RuntimeThread. The context must already have
-    /// Promise support (from the InProcessSAPRuntime prelude).
-    static func install(in context: JSContext) {
-        // Set up the global import callback (only done once; subsequent calls
-        // just update activeContext).
-        AVWasm3SetImportCallback(trampolineCallback)
-        activeContext = context
-        importFunctions.removeAll()
+    private static let invokeImport: AVWasm3ImportCallback = { userdata, id, function, args, result in
+        guard let userdata, let function else { return 0 }
+        let bridge = Unmanaged<Wasm3Polyfill>.fromOpaque(userdata).takeUnretainedValue()
+        guard let callback = bridge.imports[id], let context = bridge.context else { return 0 }
+        var values: [Any] = []
+        var types: [Int32] = []
+        for index in 0..<AVWasm3FuncArgCount(function) {
+            let type = AVWasm3ArgType(function, index)
+            types.append(type)
+            values.append(decoded(args?[Int(index)] ?? 0, as: type))
+        }
+        let returnType = AVWasm3RetType(function)
+        let value = callback.call(withArguments: [types, values, returnType])
+        guard context.exception == nil else { return 0 }
+        result?.pointee = encoded(value, as: returnType)
+        return 1
+    }
 
-        // Store instance references to prevent premature deallocation.
-        var instances: [Int: AVWasm3InstanceRef] = [:]
-        var nextInstanceID = 1
-        var nextImportID: Int32 = 1
+    private static let releaseBuffer: JSTypedArrayBytesDeallocator = { _, opaque in
+        if let opaque { Unmanaged<Instance>.fromOpaque(opaque).release() }
+    }
 
-        // --- Native hook: create a wasm3 instance ---
-        let create: @convention(block) (JSValue) -> JSValue = { [weak context] wasmBuf in
-            guard let context else { return JSValue(undefinedIn: JSContext.current()) }
-            guard let wasmData = extractBytes(from: wasmBuf, context: context) else {
-                context.exception = JSValue(newErrorFromMessage: "wasm3: invalid buffer", in: context)
-                return JSValue(undefinedIn: context)
+    func install(in context: JSContext) {
+        let create: @convention(block) (JSValue, JSValue) -> Int = { [weak self] bytes, modules in
+            guard let self, let context = self.context else { return -1 }
+            func fail(_ message: String) -> Int {
+                context.exception = JSValue(newErrorFromMessage: message, in: context)
+                return -1
             }
-
-            var errorStr: UnsafePointer<CChar>?
-            let stackSize: UInt32 = 4 * 1024 * 1024 // 4 MB interpreter stack
-            let inst: AVWasm3InstanceRef? = wasmData.withUnsafeBytes { raw in
-                AVWasm3Create(
-                    raw.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                    UInt32(raw.count),
-                    stackSize,
-                    &errorStr
-                )
+            let global = context.jsGlobalContextRef!
+            guard let raw = bytes.jsValueRef, let buffer = JSValueToObject(global, raw, nil) else { return fail("Invalid WASM buffer") }
+            let size = JSObjectGetArrayBufferByteLength(global, buffer, nil)
+            guard size > 0, size <= 64 * 1024 * 1024,
+                  let base = JSObjectGetArrayBufferBytesPtr(global, buffer, nil) else { return fail("Invalid WASM buffer length") }
+            var error: UnsafePointer<CChar>?
+            guard let handle = AVWasm3Create(base.assumingMemoryBound(to: UInt8.self), UInt32(size), 4 << 20, &error) else {
+                return fail(error.map { String(cString: $0) } ?? "Cannot load WASM")
             }
-            guard let inst else {
-                let msg = errorStr.map { String(cString: $0) } ?? "unknown error"
-                context.exception = JSValue(newErrorFromMessage: "wasm3 create: \(msg)", in: context)
-                return JSValue(undefinedIn: context)
+            let instance = Instance(handle)
+            AVWasm3SetImportCallback(handle, Self.invokeImport, Unmanaged.passUnretained(self).toOpaque())
+            var linked: [Int32] = []
+            var committed = false
+            defer { if !committed { linked.forEach { self.imports.removeValue(forKey: $0) } } }
+            // JavaScript supplies names only. Preserve callable values as JSValue.
+            let names = modules.forProperty("names")?.toArray() as? [[String]] ?? []
+            let wrapped = modules.forProperty("wrapped")
+            for (index, pair) in names.enumerated() where pair.count == 2 {
+                let id = self.nextImport
+                if let error = AVWasm3LinkImportTrampoline(handle, pair[0], pair[1], id) {
+                    let message = String(cString: error)
+                    if message == "function lookup failed" { continue }
+                    return fail(message)
+                }
+                guard let callable = wrapped?.atIndex(index) else { return fail("Missing WASM import callback") }
+                self.imports[id] = callable
+                linked.append(id)
+                self.nextImport += 1
             }
-
-            let id = nextInstanceID
-            nextInstanceID += 1
-            instances[id] = inst
-
-            return JSValue(int32: Int32(id), in: context)
+            if let error = AVWasm3Compile(handle) { return fail(String(cString: error)) }
+            if let error = AVWasm3RunStart(handle) { return fail(String(cString: error)) }
+            let id = self.nextInstance
+            self.nextInstance += 1
+            self.instances[id] = instance
+            committed = true
+            return id
         }
         context.setObject(create, forKeyedSubscript: "__avW3Create" as NSString)
 
-        // --- Native hook: link an import to the trampoline ---
-        let linkImport: @convention(block) (Int, String, String) -> Int32 = { instanceID, moduleName, funcName in
-            guard let inst = instances[instanceID] else { return -1 }
-            let importID = nextImportID
-            nextImportID += 1
-
-            // Link with NULL signature (wildcard) to match any import signature
-            let result = AVWasm3LinkImportTrampoline(inst, moduleName, funcName, nil, importID)
-            if let result {
-                let msg = String(cString: result)
-                // "function lookup failed" means the WASM module doesn't import this;
-                // that's fine - the importObject may have extra entries.
-                if msg == "function lookup failed" { return -1 }
+        let exports: @convention(block) (Int) -> [[String: Any]] = { [weak self] id in
+            guard let handle = self?.instances[id]?.handle else { return [] }
+            return (0..<AVWasm3ExportCount(handle)).compactMap { index in
+                guard let name = AVWasm3ExportName(handle, index) else { return nil }
+                return ["name": String(cString: name), "kind": Int(AVWasm3ExportKind(handle, index))]
             }
-            return importID
         }
-        context.setObject(linkImport, forKeyedSubscript: "__avW3Link" as NSString)
+        context.setObject(exports, forKeyedSubscript: "__avW3Exports" as NSString)
 
-        // --- Native hook: register a JS function for an importID ---
-        let registerFunc: @convention(block) (Int32, JSValue) -> Void = { importID, jsFunc in
-            Wasm3Polyfill.importFunctions[importID] = jsFunc
-        }
-        context.setObject(registerFunc, forKeyedSubscript: "__avW3Register" as NSString)
-
-        // --- Native hook: compile the module ---
-        let compile: @convention(block) (Int) -> JSValue = { [weak context] instanceID in
-            guard let context else { return JSValue(undefinedIn: JSContext.current()) }
-            guard let inst = instances[instanceID] else {
-                context.exception = JSValue(newErrorFromMessage: "wasm3: instance not found", in: context)
+        let call: @convention(block) (Int, String, Int32, JSValue) -> JSValue = { [weak self] id, name, slot, args in
+            guard let self, let context = self.context else { return JSValue(undefinedIn: JSContext.current()) }
+            func fail(_ message: String) -> JSValue {
+                context.exception = JSValue(newErrorFromMessage: message, in: context)
                 return JSValue(undefinedIn: context)
             }
-            if let err = AVWasm3Compile(inst) {
-                let msg = String(cString: err)
-                context.exception = JSValue(newErrorFromMessage: "wasm3 compile: \(msg)", in: context)
-                return JSValue(bool: false, in: context)
+            guard let handle = self.instances[id]?.handle else { return fail("WASM instance has closed") }
+            let key = slot < 0 ? name : "#\(slot)"
+            guard let function = self.functions[id]?[key] ?? (slot < 0 ? AVWasm3FindFunction(handle, name) : AVWasm3TableFunction(handle, UInt32(slot))) else {
+                return fail("WASM callable not found: \(key)")
             }
-            return JSValue(bool: true, in: context)
+            self.functions[id, default: [:]][key] = function
+            let count = AVWasm3FuncArgCount(function)
+            let returns = AVWasm3FuncRetCount(function)
+            guard returns <= 1 else { return fail("Multiple WASM results are unsupported") }
+            var values = (0..<count).map { index in
+                Int64(bitPattern: Self.encoded(args.atIndex(Int(index)), as: AVWasm3ArgType(function, index)))
+            }
+            var result: Int64 = 0
+            if let error = AVWasm3CallFunc(function, count, &values, returns, &result) {
+                return fail(String(cString: error))
+            }
+            if returns == 0 { return JSValue(undefinedIn: context) }
+            let type = AVWasm3RetType(function)
+            return JSValue(object: [Self.decoded(UInt64(bitPattern: result), as: type), type], in: context)
         }
-        context.setObject(compile, forKeyedSubscript: "__avW3Compile" as NSString)
+        context.setObject(call, forKeyedSubscript: "__avW3Call" as NSString)
 
-        // --- Native hook: run start function ---
-        let runStart: @convention(block) (Int) -> Void = { instanceID in
-            guard let inst = instances[instanceID] else { return }
-            let result = AVWasm3RunStart(inst)
-            // Some modules have no start, that's OK
-            _ = result
-        }
-        context.setObject(runStart, forKeyedSubscript: "__avW3Start" as NSString)
-
-        // --- Native hook: call an exported function ---
-        let callExport: @convention(block) (Int, String, JSValue) -> JSValue = { [weak context] instanceID, funcName, argsArray in
-            guard let context else { return JSValue(undefinedIn: JSContext.current()) }
-            guard let inst = instances[instanceID] else {
-                context.exception = JSValue(newErrorFromMessage: "wasm3: instance not found", in: context)
-                return JSValue(undefinedIn: context)
-            }
-            guard let fn = AVWasm3FindFunction(inst, funcName) else {
-                context.exception = JSValue(newErrorFromMessage: "wasm3: '\(funcName)' not found", in: context)
-                return JSValue(undefinedIn: context)
-            }
-
-            let argc = AVWasm3FuncArgCount(fn)
-            var argv = [Int64](repeating: 0, count: max(1, Int(argc)))
-            if !argsArray.isUndefined && !argsArray.isNull {
-                let len = min(Int(argc), Int(argsArray.forProperty("length")?.toInt32() ?? 0))
-                for i in 0..<len {
-                    argv[i] = argsArray.atIndex(i)?.toInt64() ?? 0
-                }
-            }
-
-            let retc = AVWasm3FuncRetCount(fn)
-            var retv = [Int64](repeating: 0, count: max(1, Int(retc)))
-
-            if let err = AVWasm3CallFunc(fn, argc, &argv, retc, &retv) {
-                let msg = String(cString: err)
-                context.exception = JSValue(newErrorFromMessage: "wasm3 call '\(funcName)': \(msg)", in: context)
-                return JSValue(undefinedIn: context)
-            }
-
-            if retc == 0 { return JSValue(undefinedIn: context) }
-            return JSValue(int64: retv[0], in: context)
-        }
-        context.setObject(callExport, forKeyedSubscript: "__avW3Call" as NSString)
-
-        // --- Native hook: find exported function names ---
-        let findExports: @convention(block) (Int) -> JSValue = { [weak context] instanceID in
-            guard let context else { return JSValue(newArrayIn: JSContext.current()) }
-            guard let inst = instances[instanceID] else {
-                return JSValue(newArrayIn: context)!
-            }
-            let exports = JSValue(newArrayIn: context)!
-            // Check common Go WASM and generic exports
-            let names = ["run", "resume", "getsp", "mem", "_start",
-                         "_initialize", "memory", "malloc", "free",
-                         "main", "_main"]
-            var idx = 0
-            for name in names {
-                if AVWasm3FindFunction(inst, name) != nil {
-                    exports.setValue(name, at: idx)
-                    idx += 1
-                }
-            }
-            return exports
-        }
-        context.setObject(findExports, forKeyedSubscript: "__avW3Exports" as NSString)
-
-        // --- Native hook: get memory as ArrayBuffer ---
-        let getMemory: @convention(block) (Int) -> JSValue = { [weak context] instanceID in
-            guard let context else { return JSValue(nullIn: JSContext.current()) }
-            guard let inst = instances[instanceID] else {
-                return JSValue(nullIn: context)
-            }
-            var size: UInt32 = 0
-            guard let ptr = AVWasm3GetMemory(inst, &size), size > 0 else {
-                return JSValue(nullIn: context)
-            }
-            // Create an ArrayBuffer backed by the wasm3 memory.
-            // This is a live view; callers must not hold references past grow/destroy.
+        let memory: @convention(block) (Int) -> JSValue = { [weak self] id in
+            guard let self, let context = self.context else { return JSValue(nullIn: JSContext.current()) }
+            guard let instance = self.instances[id] else { return JSValue(nullIn: context) }
+            var size = 0
+            guard let bytes = AVWasm3GetMemory(instance.handle, &size), size > 0 else { return JSValue(nullIn: context) }
+            if let cached = self.buffers[id], cached.size == size { return cached.value }
+            // The interpreter reserves linear memory at one address. Keep its
+            // owner alive until the last JavaScript view releases the buffer.
+            let retained = Unmanaged.passRetained(instance).toOpaque()
             var exception: JSValueRef?
-            guard let ab = JSObjectMakeArrayBufferWithBytesNoCopy(
-                context.jsGlobalContextRef, ptr, Int(size),
-                nil, nil, &exception
-            ) else {
+            guard let buffer = JSObjectMakeArrayBufferWithBytesNoCopy(context.jsGlobalContextRef, bytes, size, Self.releaseBuffer, retained, &exception) else {
+                // JSC calls the supplied deallocator on construction failure.
                 return JSValue(nullIn: context)
             }
-            return JSValue(jsValueRef: ab, in: context)
+            let value = JSValue(jsValueRef: buffer, in: context)!
+            self.buffers[id] = (size, value)
+            return value
         }
-        context.setObject(getMemory, forKeyedSubscript: "__avW3Memory" as NSString)
-
-        // --- Native hook: get memory size in bytes ---
-        let memSize: @convention(block) (Int) -> Int = { instanceID in
-            guard let inst = instances[instanceID] else { return 0 }
-            var size: UInt32 = 0
-            _ = AVWasm3GetMemory(inst, &size)
-            return Int(size)
-        }
-        context.setObject(memSize, forKeyedSubscript: "__avW3MemSize" as NSString)
-
-        // --- Native hook: destroy instance ---
-        let destroy: @convention(block) (Int) -> Void = { instanceID in
-            if let inst = instances.removeValue(forKey: instanceID) {
-                AVWasm3Destroy(inst)
-            }
-        }
-        context.setObject(destroy, forKeyedSubscript: "__avW3Destroy" as NSString)
-
-        // --- Evaluate the JavaScript polyfill ---
-        context.evaluateScript(polyfillScript, withSourceURL: URL(string: "appvault://wasm3-polyfill.js"))
-        if let ex = context.exception {
-            context.exception = nil
-            _ = ex // The setUp caller checks for WebAssembly availability
-        }
+        context.setObject(memory, forKeyedSubscript: "__avW3Memory" as NSString)
+        context.evaluateScript(Self.script, withSourceURL: URL(string: "appvault://wasm3-polyfill.js"))
     }
 
-    // MARK: - Helpers
-
-    private static func extractBytes(from value: JSValue, context: JSContext) -> Data? {
-        let ctxRef = context.jsGlobalContextRef!
-        let valRef = value.jsValueRef!
-
-        // Check for ArrayBuffer
-        if let obj = JSValueToObject(ctxRef, valRef, nil) {
-            let len = JSObjectGetArrayBufferByteLength(ctxRef, obj, nil)
-            if len > 0, let ptr = JSObjectGetArrayBufferBytesPtr(ctxRef, obj, nil) {
-                return Data(bytes: ptr, count: len)
-            }
-        }
-
-        // Check for TypedArray (Uint8Array etc.)
-        let typedType = JSValueGetTypedArrayType(ctxRef, valRef, nil)
-        if typedType != kJSTypedArrayTypeNone && typedType != kJSTypedArrayTypeArrayBuffer {
-            if let obj = JSValueToObject(ctxRef, valRef, nil) {
-                let len = JSObjectGetTypedArrayByteLength(ctxRef, obj, nil)
-                if len > 0, let ptr = JSObjectGetTypedArrayBytesPtr(ctxRef, obj, nil) {
-                    let offset = JSObjectGetTypedArrayByteOffset(ctxRef, obj, nil)
-                    return Data(bytes: ptr.advanced(by: offset), count: len)
-                }
-            }
-        }
-        return nil
-    }
-
-    // MARK: - JS polyfill
-
-    static let polyfillScript = #"""
-(function(G) {
+    static let script = #"""
+(function (root) {
   "use strict";
-  // WebAssembly polyfill backed by wasm3 (pure interpreter, no JIT/MAP_JIT).
-  // Native hooks: __avW3Create, __avW3Link, __avW3Register, __avW3Compile,
-  //               __avW3Start, __avW3Call, __avW3Exports, __avW3Memory,
-  //               __avW3MemSize, __avW3Destroy
-
-  function WasmMemory(iid) {
-    this._iid = iid;
-    Object.defineProperty(this, 'buffer', {
-      get: function() {
-        return G.__avW3Memory(this._iid) || new ArrayBuffer(0);
+  const importList = modules => {
+    const names = [], wrapped = [];
+    for (const [module, values] of Object.entries(modules || {})) {
+      for (const [name, func] of Object.entries(values)) {
+        if (typeof func !== "function") continue;
+        names.push([module, name]);
+        wrapped.push((types, args, result) => {
+          const value = func(...args.map((arg, i) => types[i] === 2 ? BigInt(arg) : arg));
+          return result === 2 ? String(value) : value;
+        });
       }
-    });
-  }
-  WasmMemory.prototype.grow = function(delta) {
-    // Memory growth happens inside wasm3 via the memory.grow instruction.
-    // The JS side just re-reads the buffer property each time.
-    return G.__avW3MemSize(this._iid) / 65536;
+    }
+    return {names, wrapped};
   };
-
-  function WasmInstance(iid, exportNames) {
-    var self = this;
-    this._iid = iid;
+  function Module(bytes) {
+    this.bytes = ArrayBuffer.isView(bytes)
+      ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      : bytes;
+  }
+  function Instance(module, imports) {
+    const id = root.__avW3Create(module.bytes, importList(imports));
+    if (id < 1) throw new Error("WebAssembly interpreter could not instantiate module");
+    const callable = (name, index = -1) => (...args) => {
+      const result = root.__avW3Call(id, name, index, args.map(arg => typeof arg === "bigint" ? String(arg) : arg));
+      return !result ? undefined : result[1] === 2 ? BigInt(result[0]) : result[0];
+    };
     this.exports = {};
-
-    // Set up exported functions as callable wrappers
-    for (var i = 0; i < exportNames.length; i++) {
-      (function(name) {
-        self.exports[name] = function() {
-          var args = [];
-          for (var j = 0; j < arguments.length; j++) {
-            var v = arguments[j];
-            args.push(typeof v === 'number' ? v : Number(v) || 0);
-          }
-          return G.__avW3Call(iid, name, args);
-        };
-      })(exportNames[i]);
+    for (const {name, kind} of root.__avW3Exports(id)) {
+      if (kind === 0) this.exports[name] = callable(name);
+      else if (kind === 1) this.exports[name] = {get: slot => callable("", slot)};
+      else if (kind === 2) this.exports[name] = {get buffer() {return root.__avW3Memory(id);}};
+      else throw new Error("Unsupported WebAssembly export kind: " + kind);
     }
-
-    // Memory is always available as 'mem' and 'memory' for Go WASM
-    var mem = new WasmMemory(iid);
-    self.exports.mem = mem;
-    self.exports.memory = mem;
   }
-
-  function WasmModule() {}
-
-  G.WebAssembly = {
-    instantiate: function(bufferSource, importObject) {
-      return new Promise(function(resolve, reject) {
-        try {
-          // Normalize input to ArrayBuffer
-          var bytes = bufferSource;
-          if (ArrayBuffer.isView(bufferSource)) {
-            bytes = bufferSource.buffer.slice(
-              bufferSource.byteOffset,
-              bufferSource.byteOffset + bufferSource.byteLength
-            );
-          }
-
-          // Create the wasm3 instance
-          var iid = G.__avW3Create(bytes);
-          if (iid <= 0) {
-            reject(new Error("WebAssembly: failed to create instance"));
-            return;
-          }
-
-          // Link imports from the importObject
-          if (importObject) {
-            var moduleNames = Object.keys(importObject);
-            for (var m = 0; m < moduleNames.length; m++) {
-              var modName = moduleNames[m];
-              var mod = importObject[modName];
-              if (!mod || typeof mod !== 'object') continue;
-              var funcNames = Object.keys(mod);
-              for (var f = 0; f < funcNames.length; f++) {
-                var fName = funcNames[f];
-                var fn = mod[fName];
-                if (typeof fn !== 'function') continue;
-                // Link this import and get an importID
-                var importID = G.__avW3Link(iid, modName, fName);
-                if (importID > 0) {
-                  // Register the JS function for this importID
-                  G.__avW3Register(importID, fn);
-                }
-              }
-            }
-          }
-
-          // Compile
-          if (!G.__avW3Compile(iid)) {
-            G.__avW3Destroy(iid);
-            reject(new Error("WebAssembly: compilation failed"));
-            return;
-          }
-
-          // Run start function (if any)
-          G.__avW3Start(iid);
-
-          // Discover exports
-          var exportNames = G.__avW3Exports(iid) || [];
-
-          var instance = new WasmInstance(iid, exportNames);
-          var module = new WasmModule();
-          resolve({ module: module, instance: instance });
-        } catch (e) {
-          reject(e);
-        }
-      });
-    },
-    Memory: WasmMemory,
-    Instance: WasmInstance,
-    Module: WasmModule,
-    validate: function() { return true; },
-    compile: function(bytes) {
-      return G.WebAssembly.instantiate(bytes, {}).then(function(r) { return r.module; });
-    },
-    instantiateStreaming: function(response, importObject) {
-      return response.then(function(r) { return r.arrayBuffer(); })
-        .then(function(bytes) { return G.WebAssembly.instantiate(bytes, importObject); });
+  root.WebAssembly = {
+    Module, Instance, RuntimeError: Error,
+    instantiate: async (bytes, imports) => {
+      if (bytes instanceof Module) return new Instance(bytes, imports);
+      const module = new Module(bytes);
+      return {module, instance: new Instance(module, imports)};
     }
   };
+  // Unicorn has a built-in interpreted path for guest execution.
+  root.sapWasmJit = false;
 })(globalThis);
 """#
 }

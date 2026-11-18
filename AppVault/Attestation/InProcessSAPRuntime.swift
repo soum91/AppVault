@@ -33,6 +33,7 @@ final class InProcessSAPRuntime: @unchecked Sendable {
     private var context: JSContext?
     private var timers: [Int: JSValue] = [:]
     private var nextTimer = 0
+    private var wasmBridge: Wasm3Polyfill?
     private let stateLock = NSLock()
     private var isShutDown = false
 
@@ -127,12 +128,22 @@ final class InProcessSAPRuntime: @unchecked Sendable {
         session.invalidateAndCancel()
         thread.perform { [self] in
             timers.removeAll()
+            wasmBridge?.close()
+            wasmBridge = nil
             context = nil
             thread.finish()
         }
     }
 
     // MARK: - Setup (runtime thread)
+
+    private static var forceInterpreter: Bool {
+        #if APPVAULT_INTERPRETER_TEST
+        true
+        #else
+        false
+        #endif
+    }
 
     private func setUp() throws {
         guard let machine = JSVirtualMachine(), let context = JSContext(virtualMachine: machine) else {
@@ -146,11 +157,11 @@ final class InProcessSAPRuntime: @unchecked Sendable {
             context.exception = nil
             throw ToolError.message("Local signer shims failed to load (\(Self.safeDescription(exception))).")
         }
-        let hasNativeWasm = context.evaluateScript("typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function'")?.toBool() == true
+        let hasNativeWasm = !Self.forceInterpreter && context.evaluateScript("typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function'")?.toBool() == true
         if !hasNativeWasm {
-            // Native WebAssembly is unavailable (MAP_JIT claimed by forkfix.dylib
-            // on Dopamine jailbreaks). Install the wasm3 interpreter polyfill.
-            Wasm3Polyfill.install(in: context)
+            let bridge = Wasm3Polyfill(context: context)
+            wasmBridge = bridge
+            bridge.install(in: context)
             if let exception = context.exception {
                 context.exception = nil
                 throw ToolError.message("wasm3 polyfill failed: \(Self.safeDescription(exception))")

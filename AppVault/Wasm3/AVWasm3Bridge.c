@@ -1,7 +1,8 @@
 // AVWasm3Bridge.c - wasm3 interpreter bridge for JSC WebAssembly polyfill
 // MIT License (wasm3), project license (bridge code)
 #include "AVWasm3Bridge.h"
-#include "wasm3.h"
+#include "m3_env.h"
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -9,44 +10,30 @@ struct AVWasm3Instance {
     IM3Environment env;
     IM3Runtime     runtime;
     IM3Module      module;
+    AVWasm3ImportCallback callback;
+    void* userdata;
     uint8_t*       wasmCopy; // persistent copy of WASM bytes
 };
 
-// --- Global import trampoline ---
-
-static AVWasm3ImportCallback g_importCallback = NULL;
-
-void AVWasm3SetImportCallback(AVWasm3ImportCallback callback) {
-    g_importCallback = callback;
+void AVWasm3SetImportCallback(AVWasm3InstanceRef instance,
+                              AVWasm3ImportCallback callback, void* userdata) {
+    instance->callback = callback;
+    instance->userdata = userdata;
 }
 
-// Generic trampoline called by wasm3 for all linked imports.
-// The importID is stored in _ctx->userdata.
-// Stack layout: [ret0..retN-1] [arg0..argM-1]
-// For void(i32) (Go WASM style): [arg0]
-// For i32(i32,i32): [ret0] [arg0] [arg1]
-static const void* avGenericTrampoline(IM3Runtime runtime,
-                                       IM3ImportContext _ctx,
-                                       uint64_t* _sp,
-                                       void* _mem) {
-    if (!g_importCallback) return "no import callback set";
-
-    int32_t importID = (int32_t)(intptr_t)_ctx->userdata;
-    uint32_t retc = m3_GetRetCount(_ctx->function);
-    uint32_t argc = m3_GetArgCount(_ctx->function);
-
-    // Arguments start after return slots on the value stack
-    uint64_t* args = _sp + retc;
-    uint64_t retval = 0;
-
-    g_importCallback(importID, argc, args, &retval);
-
-    // Store return value if the function returns something
-    if (retc > 0) {
-        _sp[0] = retval;
+static const void* avGenericTrampoline(IM3Runtime runtime, IM3ImportContext context,
+                                       uint64_t* stack, void* memory) {
+    (void)memory;
+    AVWasm3InstanceRef instance = m3_GetUserData(runtime);
+    const uint32_t returns = m3_GetRetCount(context->function);
+    if (!instance->callback || returns > 1) return "unsupported host callback";
+    int32_t importID = (int32_t)(intptr_t)context->userdata;
+    uint64_t result = 0;
+    if (!instance->callback(instance->userdata, importID, context->function, stack + returns, &result)) {
+        return "JavaScript host callback failed";
     }
-
-    return NULL; // m3Err_none = success
+    if (returns) stack[0] = result;
+    return NULL;
 }
 
 // --- Instance lifecycle ---
@@ -78,7 +65,7 @@ AVWasm3InstanceRef AVWasm3Create(const uint8_t* wasmBytes, uint32_t wasmLength,
         if (outError) *outError = "failed to create wasm3 environment";
         return NULL;
     }
-    inst->runtime = m3_NewRuntime(inst->env, stackSize, NULL);
+    inst->runtime = m3_NewRuntime(inst->env, stackSize, inst);
     if (!inst->runtime) {
         m3_FreeEnvironment(inst->env);
         free(inst->wasmCopy);
@@ -117,11 +104,10 @@ AVWasm3InstanceRef AVWasm3Create(const uint8_t* wasmBytes, uint32_t wasmLength,
 const char* AVWasm3LinkImportTrampoline(AVWasm3InstanceRef inst,
                                         const char* moduleName,
                                         const char* funcName,
-                                        const char* signature,
                                         int32_t importID) {
     if (!inst || !inst->module) return "invalid instance";
     return m3_LinkRawFunctionEx(inst->module, moduleName, funcName,
-                                signature,
+                                NULL,
                                 (M3RawCall)avGenericTrampoline,
                                 (void*)(intptr_t)importID);
 }
@@ -144,7 +130,7 @@ const char* AVWasm3RunStart(AVWasm3InstanceRef inst) {
 AVWasm3FuncRef AVWasm3FindFunction(AVWasm3InstanceRef inst, const char* name) {
     if (!inst || !inst->runtime) return NULL;
     IM3Function func = NULL;
-    M3Result result = m3_FindFunction(&func, inst->runtime, name);
+    M3Result result = m3_FindFunctionIn(&func, inst->module, name);
     if (result || !func) return NULL;
     return (AVWasm3FuncRef)func;
 }
@@ -184,27 +170,36 @@ const char* AVWasm3CallFunc(AVWasm3FuncRef func,
     return NULL;
 }
 
+int32_t AVWasm3ArgType(AVWasm3FuncRef func, uint32_t index) {
+    return m3_GetArgType(func, index);
+}
+
+int32_t AVWasm3RetType(AVWasm3FuncRef func) {
+    return m3_GetRetCount(func) ? m3_GetRetType(func, 0) : c_m3Type_none;
+}
+
+uint32_t AVWasm3ExportCount(AVWasm3InstanceRef instance) {
+    return instance->module->numExports;
+}
+
+const char* AVWasm3ExportName(AVWasm3InstanceRef instance, uint32_t index) {
+    return instance->module->exports[index].name;
+}
+
+uint8_t AVWasm3ExportKind(AVWasm3InstanceRef instance, uint32_t index) {
+    return instance->module->exports[index].kind;
+}
+
+AVWasm3FuncRef AVWasm3TableFunction(AVWasm3InstanceRef instance, uint32_t index) {
+    IM3Function function = NULL;
+    return m3_GetTableFunction(&function, instance->module, index) ? NULL : function;
+}
+
 // --- Memory ---
 
-uint8_t* AVWasm3GetMemory(AVWasm3InstanceRef inst, uint32_t* outSize) {
+uint8_t* AVWasm3GetMemory(AVWasm3InstanceRef inst, size_t* outSize) {
     if (!inst || !inst->module) return NULL;
     return m3_GetMemory(inst->module, outSize, 0);
-}
-
-uint32_t AVWasm3GrowMemory(AVWasm3InstanceRef inst, uint32_t deltaPages) {
-    // wasm3 handles memory.grow internally via the WASM instruction.
-    // For external grow requests, we can try ResizeMemory if available.
-    // Go WASM only grows memory from WASM instructions, so this is
-    // primarily for the JS Memory.grow() API (rarely used directly).
-    (void)inst; (void)deltaPages;
-    return (uint32_t)-1;
-}
-
-uint32_t AVWasm3MemoryPages(AVWasm3InstanceRef inst) {
-    if (!inst || !inst->module) return 0;
-    uint32_t size = 0;
-    m3_GetMemory(inst->module, &size, 0);
-    return size / 65536;
 }
 
 // --- Cleanup ---
