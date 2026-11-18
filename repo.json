@@ -16,19 +16,19 @@
       "category": "utilities",
       "versions": [
         {
-          "version": "0.6.3",
-          "buildVersion": "16",
+          "version": "0.6.4",
+          "buildVersion": "17",
           "date": "2026-11-18",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.6.3/AppVault-0.6.3.ipa",
-          "size": 830975,
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.6.4/AppVault-0.6.4.ipa",
+          "size": 838148,
           "minOSVersion": "16.0",
           "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified."
         }
       ],
-      "version": "0.6.3",
+      "version": "0.6.4",
       "versionDate": "2026-11-18",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.6.3/AppVault-0.6.3.ipa",
-      "size": 830975,
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.6.4/AppVault-0.6.4.ipa",
+      "size": 838148,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
