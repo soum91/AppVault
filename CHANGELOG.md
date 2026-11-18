@@ -1,3 +1,30 @@
+# Changelog
+
+## [v0.6.0] - 2026-11-18
+
+## Verified changes since v0.5.0
+
+- Use canonical relative paths for IPA integrity and decryption ([`4d7f83ea`](https://github.com/soum91/AppVault/commit/4d7f83ea1573eda654da3ea43d7d2fa19040ae88); `AppVault/Decryption/IPAExportEngine.swift`)
+- Use canonical relative paths for IPA integrity and decryption ([`fec58499`](https://github.com/soum91/AppVault/commit/fec58499274e84179f5f5b28a663553482d0c5a1); `AppVault/Decryption/HelperManifest.swift`)
+- Use canonical relative paths for IPA integrity and decryption ([`e05e5f26`](https://github.com/soum91/AppVault/commit/e05e5f269baa01e249dc0531a30172c56a6db1ed); `AppVault/Decryption/HelperPreparation.swift`)
+- Canonicalize /tmp and /private/tmp before verifying helper payload paths ([`c0fe604a`](https://github.com/soum91/AppVault/commit/c0fe604a38d793b12bc2777c209fa956e6c48d37); `AppVault/Decryption/HelperManifest.swift`)
+- Avoid unavailable URLSession temp download container during rootless authentication ([`2ff17b19`](https://github.com/soum91/AppVault/commit/2ff17b196e70aae5d672c4242524e891128017f5); `AppVault/Attestation/RuntimeAssets.swift`)
+- Show AppVault installation mode and storage location in diagnostic report ([`023de8d5`](https://github.com/soum91/AppVault/commit/023de8d552c9b08c24f13904d8826c51aca1760e); `AppVault/StoreService.swift`)
+- Detect rootless AppVault installation path even when privilege signing is unavailable ([`1469e85a`](https://github.com/soum91/AppVault/commit/1469e85a972fe46df50e5ec12030dd23c08ea0af); `AppVault/VaultStorage.swift`)
+- Document AppVault permission error 513 fix and physical-device validation boundary ([`cd1b1a40`](https://github.com/soum91/AppVault/commit/cd1b1a4000e671dde6820e2ac59f56024b4f3e8d); `RELEASE_NOTES.md`)
+- Use writable rootless temporary storage and preserve SINF resources for stock helper ([`2e304606`](https://github.com/soum91/AppVault/commit/2e304606ea5e50b569b49a905f99fb9ae0244ae9); `AppVault/Decryption/StockPreparationView.swift`)
+- Use writable rootless temporary storage and preserve SINF resources for stock helper ([`87bc5376`](https://github.com/soum91/AppVault/commit/87bc537611d88abc4a697389d542ea7a6eb0abe6); `AppVault/Decryption/HelperPreparation.swift`)
+- Use writable rootless workspace for installed-app decryption exports ([`0ab49646`](https://github.com/soum91/AppVault/commit/0ab49646f2259aa124d769c0d9fd91cb5136e5f0); `AppVault/Decryption/DecryptionService.swift`)
+- Use writable rootless workspace for installed-app decryption exports ([`6833d9dc`](https://github.com/soum91/AppVault/commit/6833d9dc94d81f7a9db54743fea08182131b7d48); `AppVault/Decryption/IPAExportEngine.swift`)
+- Provision mobile-owned AppVault storage during rootless DEB installation ([`05aff408`](https://github.com/soum91/AppVault/commit/05aff408ea2d4e5eb37b6f855dada3d5384d27d7); `packaging/rootless/DEBIAN/postinst`)
+- Preflight AppVault auth writes and report local permission failures accurately ([`49256235`](https://github.com/soum91/AppVault/commit/4925623571c573efcf63d60456f705eabec085d7); `AppVault/StoreService.swift`)
+- Use mobile-owned runtime directory for rootless authentication assets ([`1cf36b1c`](https://github.com/soum91/AppVault/commit/1cf36b1c331c4182fc3845de67d0c929c65c5780); `AppVault/Attestation/RuntimeAssets.swift`)
+- Add dedicated writable rootless AppVault storage with permission diagnostics ([`ffd7fa23`](https://github.com/soum91/AppVault/commit/ffd7fa23553157f07366d0c14b5fd17d3d719683); `AppVault/VaultStorage.swift`)
+- Specify archive fixture size at ZIPFoundation overload boundary ([`3e885cc2`](https://github.com/soum91/AppVault/commit/3e885cc2d74a1d8a829c917d4c83c4d133c5cb0b); `Tests/HelperPreparation/Tests/HelperPreparationTests/PreparationTests.swift`)
+- Prepare licensed stock iOS helper IPAs and export decrypted embedded apps ([`86730de0`](https://github.com/soum91/AppVault/commit/86730de0cd69cc026b6ce1ef0ff006d978b5f3ae); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/Decryption/DecryptionService.swift`, and 17 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.5.0...v0.6.0)
+
 # AppVault 0.6.0 (13)
 
 Adds **IPAs > Decrypt on Stock iOS**. Choose a saved/imported licensed IPA to prepare a separate per-app helper. Sign/install that helper with payload-preserving EmberSign, open it, and attempt local decryption/export. The helper keeps the target as installed resources, checks every embedded file hash, then shares a completed IPA only after all supported encrypted Mach-O slices pass page-read and encryption-marker checks. Includes nested frameworks and app extensions; watchOS content is omitted.
