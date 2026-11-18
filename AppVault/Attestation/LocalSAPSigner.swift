@@ -1,15 +1,19 @@
 // Adapted from mengangs/ipadn, pinned 81dd1f747e71b31629979e2c1de0fe234fe7de39. GPL-2.0-or-later.
 import Foundation
+#if !APPVAULT_ROOTLESS
 import WebKit
+#endif
 import Combine
 import CryptoKit
 import UIKit
 
 @MainActor
-final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler {
+final class LocalSAPSigner: NSObject, ObservableObject {
     static let shared = LocalSAPSigner()
     @Published private(set) var isPresented = false
+    #if !APPVAULT_ROOTLESS
     @Published private(set) var webView: WKWebView?
+    #endif
     @Published private(set) var title = AppText.text("正在验证请求")
     @Published private(set) var stage = AppText.text("准备本地环境")
     @Published private(set) var stageIndex = 0
@@ -24,14 +28,37 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
     private var kbCache: [String: String] = [:]
     private var storeProofRecords: [String: StoreProofRecord]?
     private var cacheRevision = UUID()
+    #if !APPVAULT_ROOTLESS
     private var reusableWebView: WKWebView?
     private var reusableBase: URL?
+    #endif
     private var idleTimeout: Task<Void, Never>?
     private var memoryObserver: AnyCancellable?
     private var recentEvents: [String] = []
     private var lastWebContentExit = false
+    /// In-process JavaScriptCore runtime used by the rootless DEB (see
+    /// InProcessSAPRuntime). Kept warm like the reusable WebKit view.
+    private var inProcessRuntime: InProcessSAPRuntime?
+    private var inProcessBase: URL?
+    /// Set when JavaScriptCore has no JIT/WebAssembly in this install, so the
+    /// WebKit runtime is used instead.
+    private var inProcessUnavailable = false
+    /// The rootless Decryptor build (APPVAULT_ROOTLESS) links no WebKit and
+    /// always uses JavaScriptCore with its dynamic-codesigning entitlement,
+    /// because WebContent exits at spawn for that platform-signed app. The
+    /// sideloaded IPA uses WebKit unless it ever runs from a rootless path.
+    #if APPVAULT_ROOTLESS
+    var usesInProcessRuntime: Bool { true }
+    #else
+    var usesInProcessRuntime: Bool { VaultStorage.isRootless && !inProcessUnavailable }
+    #endif
+    var runtimeDescription: String {
+        if inProcessUnavailable && !usesInProcessRuntime { return "local WebKit/WASM (in-process JIT unavailable)" }
+        if inProcessUnavailable { return "in-process JavaScriptCore/WASM unavailable (no JIT)" }
+        return usesInProcessRuntime ? "in-process JavaScriptCore/WASM (rootless dynamic-codesigning)" : "local WebKit/WASM"
+    }
     var diagnosticSummary: String {
-        let state = "Local signer: stage=\(stage); index=\(stageIndex); web_content_exit=\(lastWebContentExit)"
+        let state = "Local signer: runtime=\(runtimeDescription); stage=\(stage); index=\(stageIndex); web_content_exit=\(lastWebContentExit)"
         return state + "\nRuntime events: " + recentEvents.joined(separator: " | ")
     }
     private func recordStage(_ label: String) {
@@ -273,6 +300,32 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             recordStage("loopback-ready")
             try checkActive(id)
             guard let base = server.baseURL else { throw ToolError.message(AppText.text("暂时无法完成验证，请重试")) }
+            #if APPVAULT_ROOTLESS
+            do {
+                let result = try await executeInProcess(id: id, base: base, script: script, arguments: arguments,
+                                                        timeoutSeconds: timeoutSeconds, reuseRuntime: reuseRuntime, progress: progress)
+                succeeded = true
+                return result
+            } catch InProcessSAPRuntime.Failure.webAssemblyUnavailable {
+                inProcessUnavailable = true
+                recordStage("jsc-wasm-unavailable")
+                throw ToolError.message("JavaScriptCore has no JIT/WebAssembly in this install, so Apple sign-in cannot run. Reinstall the AppVault rootless DEB; it must be signed with dynamic-codesigning. See Settings > Backend Report.")
+            }
+            #else
+            if usesInProcessRuntime {
+                do {
+                    let result = try await executeInProcess(id: id, base: base, script: script, arguments: arguments,
+                                                            timeoutSeconds: timeoutSeconds, reuseRuntime: reuseRuntime, progress: progress)
+                    succeeded = true
+                    return result
+                } catch InProcessSAPRuntime.Failure.webAssemblyUnavailable {
+                    // No JIT for JavaScriptCore in this install (for example a
+                    // DEB signed without dynamic-codesigning). Use WebKit.
+                    inProcessUnavailable = true
+                    recordStage("jsc-wasm-unavailable")
+                    try checkActive(id)
+                }
+            }
             let web: WKWebView
             let warm = reuseRuntime && reusableBase == base && reusableWebView != nil
             if warm, let saved = reusableWebView { web = saved }
@@ -290,6 +343,8 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             // Give SwiftUI an opportunity to attach the signer WKWebView at a
             // normal visible size before starting expensive WebAssembly.
             await Task.yield()
+            // WebContent may already have terminated while attaching.
+            try checkActive(id)
             if !warm {
                 armTimeout(id: id, seconds: 45, message: AppText.text("本地验证环境加载超时，请重试。"))
                 progress("Loading local authentication page")
@@ -345,9 +400,76 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
             try checkActive(id)
             succeeded = true
             return result
+            #endif
         } onCancel: { [weak self] in
             Task { @MainActor in self?.stop(id: id, error: CancellationError()) }
         }
+    }
+
+    private func executeInProcess(id: UUID, base: URL, script: String, arguments: [String: Any], timeoutSeconds: UInt64, reuseRuntime: Bool, progress: @escaping @Sendable (String) -> Void) async throws -> String {
+        let warm = reuseRuntime && inProcessBase == base && inProcessRuntime?.isAlive == true
+        let runtime: InProcessSAPRuntime
+        if warm, let saved = inProcessRuntime {
+            runtime = saved
+            stage = AppText.text("复用本机验证组件")
+        } else {
+            discardInProcessRuntime()
+            armTimeout(id: id, seconds: 45, message: AppText.text("本地验证环境加载超时，请重试。"))
+            progress("Loading local authentication engine")
+            recordStage("jsc-runtime-starting")
+            runtime = try await InProcessSAPRuntime.make(serverBase: base) { index in
+                Task { @MainActor in LocalSAPSigner.shared.applyStage(index) }
+            }
+            guard operationID == id, terminalError == nil else { runtime.shutdown(); try checkActive(id); throw CancellationError() }
+            inProcessRuntime = runtime; inProcessBase = base
+            recordStage("jsc-runtime-ready")
+        }
+        try checkActive(id)
+        armTimeout(id: id, seconds: timeoutSeconds, message: AppText.text("验证已超过 3 分钟，已停止本次操作。请保持应用在前台后重试。"))
+        progress("Signing Apple authentication request")
+        recordStage("javascript-starting")
+        var values: [String: String] = [:]
+        for (key, value) in arguments { values[key] = (value as? String) ?? String(describing: value) }
+        values["proxy"] = base.appendingPathComponent("proxy").absoluteString
+        do {
+            return try await withCheckedThrowingContinuation { continuation in
+                evaluation = continuation
+                runtime.call(script: script, arguments: values) { result in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.operationID == id, let continuation = self.evaluation else { return }
+                        self.evaluation = nil
+                        switch result {
+                        case .success(let text):
+                            self.recordStage("javascript-completed")
+                            continuation.resume(returning: text)
+                        case .failure(let failure):
+                            self.recordStage("javascript-error-jsc")
+                            continuation.resume(throwing: failure)
+                        }
+                    }
+                }
+            }
+        } catch {
+            try checkActive(id)
+            // A failed operation can leave the signer's internal state open.
+            discardInProcessRuntime()
+            if warm { throw RuntimeRetry.coldStart }
+            throw error
+        }
+    }
+
+    private func applyStage(_ index: Int) {
+        guard operationID != nil, (1...2).contains(index) else { return }
+        stageIndex = index
+        recordStage("javascript-stage-\(index)")
+        stage = index == 1 ? AppText.text("加载验证组件")
+            : title == AppText.text("准备下载") ? AppText.text("生成下载授权数据")
+            : title == AppText.text("验证设备") ? AppText.text("完成设备安全验证") : AppText.text("生成请求签名")
+    }
+
+    private func discardInProcessRuntime() {
+        inProcessRuntime?.shutdown()
+        inProcessRuntime = nil; inProcessBase = nil
     }
 
     private func acquireTurn() async throws {
@@ -401,8 +523,12 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         let continuation = evaluation; evaluation = nil
         continuation?.resume(throwing: error)
         timeout?.cancel()
+        // An interrupted in-process operation may still be running; never reuse it.
+        discardInProcessRuntime()
+        #if !APPVAULT_ROOTLESS
         webView?.stopLoading()
         webView?.loadHTMLString("<!doctype html><title>Stopped</title>", baseURL: nil)
+        #endif
         isPresented = false
     }
     func cancel() {
@@ -414,39 +540,57 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         finishNavigation(.failure(CancellationError()))
         let continuation = evaluation; evaluation = nil
         continuation?.resume(throwing: CancellationError())
+        #if !APPVAULT_ROOTLESS
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "progress")
         webView?.stopLoading(); webView?.navigationDelegate = nil
+        #endif
         if reuse && UIApplication.shared.applicationState != .background {
+            #if !APPVAULT_ROOTLESS
             reusableWebView = webView; reusableBase = server.baseURL
+            #endif
             idleTimeout = Task { @MainActor [weak self] in
                 do { try await Task.sleep(nanoseconds: Self.idleKeepSeconds * 1_000_000_000) } catch { return }
                 self?.discardIdleRuntime()
             }
-        } else { reusableWebView = nil; reusableBase = nil }
-        webView = nil; isPresented = false; operationID = nil; terminalError = nil
+        } else {
+            #if !APPVAULT_ROOTLESS
+            reusableWebView = nil; reusableBase = nil
+            #endif
+            discardInProcessRuntime()
+        }
+        #if !APPVAULT_ROOTLESS
+        webView = nil
+        #endif
+        isPresented = false; operationID = nil; terminalError = nil
         handOver()
     }
     private func discardIdleRuntime() {
         guard operationID == nil else { return }
         idleTimeout?.cancel(); idleTimeout = nil
+        #if !APPVAULT_ROOTLESS
         reusableWebView?.stopLoading(); reusableWebView = nil; reusableBase = nil
+        #endif
+        discardInProcessRuntime()
     }
     func clearCache() { cacheRevision = UUID(); signatureCache.removeAll(); kbCache.removeAll(); discardIdleRuntime() }
 
     /// Loads the runtime ahead of a likely request (an app page opened), so
     /// getting the app does not wait for it. Does nothing if it is loaded or busy.
     func prewarm() {
-        guard operationID == nil, waiters.isEmpty, reusableWebView == nil,
+        guard operationID == nil, waiters.isEmpty, inProcessRuntime == nil,
               UIApplication.shared.applicationState == .active else { return }
+        #if !APPVAULT_ROOTLESS
+        guard reusableWebView == nil else { return }
+        #endif
         Task { _ = try? await execute(title: "准备验证组件", script: "return 'ready';", arguments: [:], timeoutSeconds: 30) }
     }
+}
+
+#if !APPVAULT_ROOTLESS
+extension LocalSAPSigner: WKNavigationDelegate, WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.webView === webView, operationID != nil, let index = message.body as? Int, (1...2).contains(index) else { return }
-        stageIndex = index
-        recordStage("javascript-stage-\(index)")
-        stage = index == 1 ? AppText.text("加载验证组件")
-            : title == AppText.text("准备下载") ? AppText.text("生成下载授权数据")
-            : title == AppText.text("验证设备") ? AppText.text("完成设备安全验证") : AppText.text("生成请求签名")
+        guard message.webView === webView, let index = message.body as? Int else { return }
+        applyStage(index)
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let target = navigationAction.request.url, let base = server.baseURL,
@@ -474,3 +618,4 @@ final class LocalSAPSigner: NSObject, ObservableObject, WKNavigationDelegate, WK
         stop(id: id, error: ToolError.message("WebKit authentication process terminated (WEB_CONTENT_EXIT). The local signer stopped before Apple's login/2FA response; see Settings > Backend Report."))
     }
 }
+#endif

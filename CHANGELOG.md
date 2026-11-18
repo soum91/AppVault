@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.6.6] - 2026-11-18
+
+- Rootless Decryptor regains Apple Account sign-in: the pinned SAP runtime
+  runs in-process with JavaScriptCore (`InProcessSAPRuntime.swift`), so no
+  WebContent process is spawned.
+- Add `dynamic-codesigning` to the jailbreak entitlements for JavaScriptCore
+  JIT/WebAssembly; explicit error if it is still unavailable.
+- Build the Decryptor from the shared sources with `APPVAULT_ROOTLESS`, which
+  compiles WebKit out; CI rejects a WebKit-linked rootless binary.
+- Native shims for URL, fetch (loopback only), timers, TextEncoder/Decoder,
+  crypto and script loading, tested in CI in a bare JavaScript realm.
+- IPA build stops cold WebKit attempts once WebContent exits during attach.
+- Release assets carry build 19. Rootless device sign-in remains unverified.
+
 ## [v0.6.5] - 2026-11-18
 
 - Replace the all-in-one rootless AppVault application with a standalone

@@ -87,6 +87,23 @@ struct BackupHomeView: View {
             }.tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .overlay(alignment: .center) {
+            #if APPVAULT_ROOTLESS
+            if signing.isPresented {
+                // Rootless build: the signer runs in-process (JavaScriptCore),
+                // so there is no WebKit view to keep attached.
+                VStack(spacing: 12) {
+                    Text("Local authentication engine").font(.headline)
+                    ProgressView()
+                    Text(signing.stage).font(.caption).foregroundStyle(.secondary)
+                    Text("Keep AppVault open during this step.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: 360)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding()
+            }
+            #else
             if signing.isPresented, let web = signing.webView {
                 // The runtime has no visual content, but WebKit must remain
                 // visibly attached at a real size while its WASM signer runs.
@@ -109,6 +126,7 @@ struct BackupHomeView: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                 .padding()
             }
+            #endif
         }
         .safeAreaInset(edge: .bottom) {
             if store.busy {

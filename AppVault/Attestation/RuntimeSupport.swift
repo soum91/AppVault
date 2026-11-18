@@ -1,6 +1,8 @@
 import Foundation
 import CryptoKit
+#if !APPVAULT_ROOTLESS
 import WebKit
+#endif
 import SwiftUI
 
 // Compatibility types for the reviewed, pinned upstream runtime adapter.
@@ -41,8 +43,10 @@ final class HTTPClient: @unchecked Sendable {
         return (data, response)
     }
 }
+#if !APPVAULT_ROOTLESS
 struct SigningRuntimeView: UIViewRepresentable {
     let web: WKWebView
     func makeUIView(context: Context) -> WKWebView { web }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
+#endif

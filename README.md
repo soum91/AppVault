@@ -1,3 +1,7 @@
+## Sign-in inside the rootless Decryptor (0.6.6)
+
+The rootless DEB's **AppVault Decryptor** now includes Apple Account sign-in, IPA downloads and installed-app export in one app. It links no WebKit, because WebContent exits at spawn for this platform-signed app on Dopamine/iOS 16.1.1. Instead, the pinned, hash-verified SAP runtime runs in-process with JavaScriptCore, enabled by the DEB's `dynamic-codesigning` entitlement. The sideloaded AppVault IPA still signs in through WebKit. Settings > Backend Report shows the active runtime. Rootless device sign-in remains unverified.
+
 ## iOS 16 Dopamine architecture (0.6.5)
 
 AppVault's old privileged rootless build repeatedly terminated the `WKWebView`
