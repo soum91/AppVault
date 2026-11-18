@@ -201,7 +201,7 @@ final class InProcessSAPRuntime: @unchecked Sendable {
             nextTimer += 1
             let id = nextTimer
             timers[id] = callback
-            let fire = { [weak self] in
+            let fire: @Sendable () -> Void = { [weak self] in
                 self?.thread.perform {
                     guard let self, let callback = self.timers.removeValue(forKey: id) else { return }
                     callback.call(withArguments: [])
