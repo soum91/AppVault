@@ -31,10 +31,11 @@ actor RuntimeAssets {
             let destination = Self.directory.appendingPathComponent(name)
             if let existing = try? Data(contentsOf: destination, options: .mappedIfSafe), Self.hash(existing) == digest { continue }
             let url = URL(string: "https://raw.githubusercontent.com/mengangs/ipadn/" + Self.revision + "/iPadn-iOS/vendor/SAPRuntime/files/" + name)!
-            let (temporary, response) = try await session.download(from: url)
-            defer { try? FileManager.default.removeItem(at: temporary) }
+            // download(from:) needs a URLSession temporary-file container, which
+            // a platform-signed rootless installation may not have. The pinned
+            // auth resources are bounded and can safely be fetched in memory.
+            let (data, response) = try await session.data(from: url)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw StoreProtocol.failure("runtime_download", "Authentication components could not be downloaded from the pinned source.") }
-            let data = try Data(contentsOf: temporary, options: .mappedIfSafe)
             guard Self.hash(data) == digest else { throw StoreProtocol.failure("runtime_integrity", "Authentication component integrity check failed. Sign-in was stopped.") }
             do { try data.write(to: destination, options: .atomic) }
             catch {
