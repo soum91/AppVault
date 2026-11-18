@@ -35,8 +35,6 @@ jobs:
         run: |
           python3 Tests/RuntimeUI/test_runtime.py
           node Tests/RuntimeUI/test_inprocess_prelude.cjs
-      - name: Verify stock sign-in and rootless decryption separation
-        run: python3 Tests/RootlessSplit/test_split.py
       - name: Verify pinned on-device Store attestation runtime
         run: |
           git clone https://github.com/mengangs/ipadn.git /tmp/appvault-runtime-source
@@ -76,37 +74,29 @@ jobs:
           cp -R build/Build/Products/Release-iphoneos/AppVault.app Payload/
           ldid -SAppVault/AppVault.entitlements Payload/AppVault.app/AppVault
           cp AppVault/AppVault.entitlements Payload/AppVault.app/archived-expanded-entitlements.xcent
-          zip -qry AppVault-0.6.6-19.ipa Payload
-      - name: Build rootless app (JavaScriptCore sign-in, no WebKit)
-        run: |
-          xcodebuild -project AppVault.xcodeproj -scheme AppVaultDecryptor -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-          # WebContent exits at spawn for the platform-signed rootless app; fail closed if WebKit is linked.
-          if otool -L build/Build/Products/Release-iphoneos/AppVaultDecryptor.app/AppVaultDecryptor | grep -q 'WebKit.framework'; then
-            echo "AppVaultDecryptor must not link WebKit"; exit 1
-          fi
-          otool -L build/Build/Products/Release-iphoneos/AppVaultDecryptor.app/AppVaultDecryptor | grep -q 'JavaScriptCore.framework'
-      - name: Package privileged rootless jailbreak decryptor
+          zip -qry AppVault-0.6.7-20.ipa Payload
+      - name: Package privileged rootless jailbreak app
         run: |
           mkdir -p rootless/var/jb/Applications rootless/DEBIAN
-          cp -R build/Build/Products/Release-iphoneos/AppVaultDecryptor.app rootless/var/jb/Applications/
+          cp -R build/Build/Products/Release-iphoneos/AppVault.app rootless/var/jb/Applications/
           cp packaging/rootless/DEBIAN/* rootless/DEBIAN/
           chmod 755 rootless/DEBIAN/postinst rootless/DEBIAN/postrm
-          ldid -Spackaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVaultDecryptor.app/AppVaultDecryptor
-          cp packaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVaultDecryptor.app/archived-expanded-entitlements.xcent
-          dpkg-deb --root-owner-group -Zgzip --build rootless AppVault-0.6.6-19-rootless.deb
-          dpkg-deb --info AppVault-0.6.6-19-rootless.deb
+          ldid -Spackaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVault.app/AppVault
+          cp packaging/AppVault-jailbreak.entitlements rootless/var/jb/Applications/AppVault.app/archived-expanded-entitlements.xcent
+          dpkg-deb --root-owner-group -Zgzip --build rootless AppVault-0.6.7-20-rootless.deb
+          dpkg-deb --info AppVault-0.6.7-20-rootless.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-0.6.6-ipa
+          name: AppVault-0.6.7-ipa
           path: |
-            AppVault-0.6.6-19.ipa
-            AppVault-0.6.6-19-rootless.deb
+            AppVault-0.6.7-20.ipa
+            AppVault-0.6.7-20-rootless.deb
       - name: Publish experimental native client
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view v0.6.6 >/dev/null 2>&1; then
-            gh release create v0.6.6 AppVault-0.6.6-19.ipa AppVault-0.6.6-19-rootless.deb --target "$GITHUB_SHA" --title "AppVault 0.6.6 (19) - in-process sign-in for the rootless Decryptor" --prerelease --notes-file RELEASE_NOTES.md
+          if ! gh release view v0.6.7 >/dev/null 2>&1; then
+            gh release create v0.6.7 AppVault-0.6.7-20.ipa AppVault-0.6.7-20-rootless.deb --target "$GITHUB_SHA" --title "AppVault 0.6.7 (20) - AppVault with in-process sign-in restored to the rootless DEB" --prerelease --notes-file RELEASE_NOTES.md
           fi
       - name: Refresh FlareStore source
         env:
@@ -120,13 +110,13 @@ jobs:
           data=json.loads(base64.b64decode(latest['content']))
           app=next(a for a in data['apps'] if a.get('bundleIdentifier')=='com.soum91.appvault')
           description='Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.'
-          url='https://github.com/'+repo+'/releases/download/v0.6.6/AppVault-0.6.6-19.ipa'
+          url='https://github.com/'+repo+'/releases/download/v0.6.7/AppVault-0.6.7-20.ipa'
           date=datetime.now(timezone.utc).strftime('%Y-%m-%d')
           app['subtitle']='IPA downloads and stock decryption helpers'
-          app.update(version='0.6.6',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.6.6-19.ipa'),localizedDescription=description)
-          app['versions']=[{'version':'0.6.6','buildVersion':'19','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
+          app.update(version='0.6.7',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.6.7-20.ipa'),localizedDescription=description)
+          app['versions']=[{'version':'0.6.7','buildVersion':'20','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
           data['description']=description
-          payload={'message':'Update FlareStore source for native AppVault 0.6.6 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          payload={'message':'Update FlareStore source for native AppVault 0.6.7 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
           open('feed-request.json','w').write(json.dumps(payload))
           subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
           PY

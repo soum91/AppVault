@@ -1,8 +1,6 @@
 // Adapted from mengangs/ipadn, pinned 81dd1f747e71b31629979e2c1de0fe234fe7de39. GPL-2.0-or-later.
 import Foundation
-#if !APPVAULT_ROOTLESS
 import WebKit
-#endif
 import Combine
 import CryptoKit
 import UIKit
@@ -11,9 +9,7 @@ import UIKit
 final class LocalSAPSigner: NSObject, ObservableObject {
     static let shared = LocalSAPSigner()
     @Published private(set) var isPresented = false
-    #if !APPVAULT_ROOTLESS
     @Published private(set) var webView: WKWebView?
-    #endif
     @Published private(set) var title = AppText.text("正在验证请求")
     @Published private(set) var stage = AppText.text("准备本地环境")
     @Published private(set) var stageIndex = 0
@@ -28,10 +24,8 @@ final class LocalSAPSigner: NSObject, ObservableObject {
     private var kbCache: [String: String] = [:]
     private var storeProofRecords: [String: StoreProofRecord]?
     private var cacheRevision = UUID()
-    #if !APPVAULT_ROOTLESS
     private var reusableWebView: WKWebView?
     private var reusableBase: URL?
-    #endif
     private var idleTimeout: Task<Void, Never>?
     private var memoryObserver: AnyCancellable?
     private var recentEvents: [String] = []
@@ -43,15 +37,11 @@ final class LocalSAPSigner: NSObject, ObservableObject {
     /// Set when JavaScriptCore has no JIT/WebAssembly in this install, so the
     /// WebKit runtime is used instead.
     private var inProcessUnavailable = false
-    /// The rootless Decryptor build (APPVAULT_ROOTLESS) links no WebKit and
-    /// always uses JavaScriptCore with its dynamic-codesigning entitlement,
+    /// The rootless DEB carries dynamic-codesigning and uses JavaScriptCore,
     /// because WebContent exits at spawn for that platform-signed app. The
-    /// sideloaded IPA uses WebKit unless it ever runs from a rootless path.
-    #if APPVAULT_ROOTLESS
-    var usesInProcessRuntime: Bool { true }
-    #else
+    /// sideloaded IPA uses WebKit. WebKit stays as the rootless fallback if
+    /// JavaScriptCore reports no WebAssembly.
     var usesInProcessRuntime: Bool { VaultStorage.isRootless && !inProcessUnavailable }
-    #endif
     var runtimeDescription: String {
         if inProcessUnavailable && !usesInProcessRuntime { return "local WebKit/WASM (in-process JIT unavailable)" }
         if inProcessUnavailable { return "in-process JavaScriptCore/WASM unavailable (no JIT)" }
@@ -300,18 +290,6 @@ final class LocalSAPSigner: NSObject, ObservableObject {
             recordStage("loopback-ready")
             try checkActive(id)
             guard let base = server.baseURL else { throw ToolError.message(AppText.text("暂时无法完成验证，请重试")) }
-            #if APPVAULT_ROOTLESS
-            do {
-                let result = try await executeInProcess(id: id, base: base, script: script, arguments: arguments,
-                                                        timeoutSeconds: timeoutSeconds, reuseRuntime: reuseRuntime, progress: progress)
-                succeeded = true
-                return result
-            } catch InProcessSAPRuntime.Failure.webAssemblyUnavailable {
-                inProcessUnavailable = true
-                recordStage("jsc-wasm-unavailable")
-                throw ToolError.message("JavaScriptCore has no JIT/WebAssembly in this install, so Apple sign-in cannot run. Reinstall the AppVault rootless DEB; it must be signed with dynamic-codesigning. See Settings > Backend Report.")
-            }
-            #else
             if usesInProcessRuntime {
                 do {
                     let result = try await executeInProcess(id: id, base: base, script: script, arguments: arguments,
@@ -400,7 +378,6 @@ final class LocalSAPSigner: NSObject, ObservableObject {
             try checkActive(id)
             succeeded = true
             return result
-            #endif
         } onCancel: { [weak self] in
             Task { @MainActor in self?.stop(id: id, error: CancellationError()) }
         }
@@ -525,10 +502,8 @@ final class LocalSAPSigner: NSObject, ObservableObject {
         timeout?.cancel()
         // An interrupted in-process operation may still be running; never reuse it.
         discardInProcessRuntime()
-        #if !APPVAULT_ROOTLESS
         webView?.stopLoading()
         webView?.loadHTMLString("<!doctype html><title>Stopped</title>", baseURL: nil)
-        #endif
         isPresented = false
     }
     func cancel() {
@@ -540,36 +515,26 @@ final class LocalSAPSigner: NSObject, ObservableObject {
         finishNavigation(.failure(CancellationError()))
         let continuation = evaluation; evaluation = nil
         continuation?.resume(throwing: CancellationError())
-        #if !APPVAULT_ROOTLESS
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "progress")
         webView?.stopLoading(); webView?.navigationDelegate = nil
-        #endif
         if reuse && UIApplication.shared.applicationState != .background {
-            #if !APPVAULT_ROOTLESS
             reusableWebView = webView; reusableBase = server.baseURL
-            #endif
             idleTimeout = Task { @MainActor [weak self] in
                 do { try await Task.sleep(nanoseconds: Self.idleKeepSeconds * 1_000_000_000) } catch { return }
                 self?.discardIdleRuntime()
             }
         } else {
-            #if !APPVAULT_ROOTLESS
             reusableWebView = nil; reusableBase = nil
-            #endif
             discardInProcessRuntime()
         }
-        #if !APPVAULT_ROOTLESS
         webView = nil
-        #endif
         isPresented = false; operationID = nil; terminalError = nil
         handOver()
     }
     private func discardIdleRuntime() {
         guard operationID == nil else { return }
         idleTimeout?.cancel(); idleTimeout = nil
-        #if !APPVAULT_ROOTLESS
         reusableWebView?.stopLoading(); reusableWebView = nil; reusableBase = nil
-        #endif
         discardInProcessRuntime()
     }
     func clearCache() { cacheRevision = UUID(); signatureCache.removeAll(); kbCache.removeAll(); discardIdleRuntime() }
@@ -579,14 +544,11 @@ final class LocalSAPSigner: NSObject, ObservableObject {
     func prewarm() {
         guard operationID == nil, waiters.isEmpty, inProcessRuntime == nil,
               UIApplication.shared.applicationState == .active else { return }
-        #if !APPVAULT_ROOTLESS
         guard reusableWebView == nil else { return }
-        #endif
         Task { _ = try? await execute(title: "准备验证组件", script: "return 'ready';", arguments: [:], timeoutSeconds: 30) }
     }
 }
 
-#if !APPVAULT_ROOTLESS
 extension LocalSAPSigner: WKNavigationDelegate, WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.webView === webView, let index = message.body as? Int else { return }
@@ -618,4 +580,3 @@ extension LocalSAPSigner: WKNavigationDelegate, WKScriptMessageHandler {
         stop(id: id, error: ToolError.message("WebKit authentication process terminated (WEB_CONTENT_EXIT). The local signer stopped before Apple's login/2FA response; see Settings > Backend Report."))
     }
 }
-#endif

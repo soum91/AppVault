@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.6.7] - 2026-11-18
+
+- Restore AppVault.app (with Account sign-in and downloads) as the rootless
+  DEB's app; remove the separate AppVault Decryptor target from 0.6.5/0.6.6.
+- DEB postinst removes the stale AppVaultDecryptor.app icon.
+- Keep in-process JavaScriptCore sign-in on rootless installs, with WebKit
+  fallback; drop the APPVAULT_ROOTLESS build flag for runtime selection.
+- Release assets carry build 20. Rootless device sign-in remains unverified.
+
 ## [v0.6.6] - 2026-11-18
 
 - Rootless Decryptor regains Apple Account sign-in: the pinned SAP runtime

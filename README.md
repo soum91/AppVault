@@ -1,3 +1,7 @@
+## AppVault restored in the rootless DEB (0.6.7)
+
+The rootless DEB installs AppVault.app again, with Apple Account sign-in, IPA downloads and installed-app decryption in one app; the separate AppVault Decryptor from 0.6.5/0.6.6 is gone. Sign-in on rootless installs runs in-process with JavaScriptCore, since WebKit's WebContent exits at spawn there. Rootless device sign-in remains unverified.
+
 ## Sign-in inside the rootless Decryptor (0.6.6)
 
 The rootless DEB's **AppVault Decryptor** now includes Apple Account sign-in, IPA downloads and installed-app export in one app. It links no WebKit, because WebContent exits at spawn for this platform-signed app on Dopamine/iOS 16.1.1. Instead, the pinned, hash-verified SAP runtime runs in-process with JavaScriptCore, enabled by the DEB's `dynamic-codesigning` entitlement. The sideloaded AppVault IPA still signs in through WebKit. Settings > Backend Report shows the active runtime. Rootless device sign-in remains unverified.

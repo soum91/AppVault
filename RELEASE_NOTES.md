@@ -1,15 +1,12 @@
-# AppVault 0.6.6 (19): Apple sign-in inside the rootless Decryptor
+# AppVault 0.6.7 (20): AppVault and sign-in restored to the rootless DEB
 
-0.6.5 moved sign-in out of the rootless DEB because WebKit's WebContent process exits at spawn for the platform-signed app on Dopamine/iOS 16.1.1 (`WEB_CONTENT_EXIT` at `webview-attaching`, before navigation). 0.6.6 brings sign-in back to the rootless app without WebKit.
+0.6.5 replaced the rootless DEB's AppVault app with a separate AppVault Decryptor app, and 0.6.6 kept that layout. This release undoes it: the DEB installs **AppVault.app** again, with Search, Account sign-in, IPA downloads, Decrypt Installed Apps and Settings, as it did through 0.6.4.
 
 Changes:
-- New `AppVault/Attestation/InProcessSAPRuntime.swift` runs the same pinned, hash-verified SAP runtime (`sap-signer.js`, `unicorn_x86.js`, `wasm_exec.js`, `sap.wasm`) in an in-process JavaScriptCore context on a dedicated 16 MB-stack thread. Native shims supply `URL`, `fetch`, timers, `TextEncoder`/`TextDecoder`, `crypto.getRandomValues`, `performance.now`, `atob`/`btoa` and script loading. Requests reach only the existing loopback server (runtime files and the three-endpoint Apple proxy), and scripts load only from the verified runtime folder.
-- `packaging/AppVault-jailbreak.entitlements` adds `dynamic-codesigning`, which JavaScriptCore needs before it enables JIT and WebAssembly in-process. The sideloaded IPA's entitlements are unchanged.
-- The `AppVaultDecryptor` target now compiles the shared AppVault sources with `APPVAULT_ROOTLESS`. That flag removes every WebKit import and view from the build. `Decryptor/DecryptorApp.swift` opens the full AppVault UI: Search, Account sign-in, IPAs with **Decrypt Installed Apps**, and Settings with the Backend Report. Its now-redundant copies (`DecryptAccess.m`, `DecryptorBridge.h`, `DecryptorErrors.swift`) are removed in favour of the shared originals. Bundle ID `com.soum91.appvault.decryptor` and the Debian package identity are unchanged.
-- CI fails if the built `AppVaultDecryptor` binary links `WebKit.framework` (`otool -L`). `Tests/RootlessSplit/test_split.py` now enforces that no WebKit import escapes the `APPVAULT_ROOTLESS` guard, instead of excluding all sign-in code.
-- If JavaScriptCore reports no WebAssembly in the rootless app, sign-in stops with an explicit reinstall message and the `jsc-wasm-unavailable` stage, instead of falling back to WebKit.
-- `LocalSAPSigner` (IPA build) stops a cold WebKit attempt as soon as WebContent exits during attach. Backend Report names the active runtime and records `jsc-runtime-starting`, `jsc-runtime-ready` and `javascript-error-jsc` stages. JavaScript errors are reduced to a type and a short fixed phrase, with no URLs, tokens or request data.
-- Release assets include the build number: `AppVault-0.6.6-19.ipa` and `AppVault-0.6.6-19-rootless.deb`.
-- New CI test `Tests/RuntimeUI/test_inprocess_prelude.cjs` runs the shim layer in a bare JavaScript realm.
+- Remove the `AppVaultDecryptor` target, `Decryptor/` sources and `Tests/RootlessSplit/test_split.py`. `project.yml`, `.github/workflows/ios-build.yml`, `packaging/rootless/DEBIAN/*` and `AppVault/Decryption/DecryptionService.swift` return to their 0.6.4 layout, with version 0.6.7 (20).
+- The DEB postinst unregisters the stale `AppVaultDecryptor.app` icon left by 0.6.5/0.6.6, then registers `AppVault.app`.
+- Keep the in-process sign-in fix from 0.6.6: on rootless installs `LocalSAPSigner` runs the pinned SAP runtime with JavaScriptCore (`InProcessSAPRuntime.swift`), using the DEB's `dynamic-codesigning` entitlement, because WebKit's WebContent exits at spawn there. If JavaScriptCore reports no WebAssembly, it falls back to WebKit and records `jsc-wasm-unavailable`. The sideloaded IPA keeps WebKit sign-in.
+- The `APPVAULT_ROOTLESS` compile flag is removed; rootless behaviour is chosen at runtime. During in-process signing a progress card replaces the WebKit view.
+- Release assets: `AppVault-0.6.7-20.ipa` and `AppVault-0.6.7-20-rootless.deb`.
 
-**Verification boundary:** CI covers the shim layer, the source guards and the native builds. The pinned runtime was not executed under JavaScriptCore during development, and JIT acceptance of `dynamic-codesigning` on Dopamine/iOS 16.1.1 has not been confirmed on a device. Rootless sign-in remains unverified until tested; Settings > Backend Report shows the runtime line and stages. The sideloaded IPA still signs in through WebKit as in 0.6.5.
+**Verification boundary:** CI covers the shim layer, the source guards and both builds. Rootless sign-in on Dopamine/iOS 16.1.1 has not been confirmed on a device; Settings > Backend Report shows the active runtime and stages.

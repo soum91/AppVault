@@ -25,7 +25,7 @@ struct DecryptableApp: Identifiable, Sendable {
     }
     func discover() {
         guard !busy else { return }
-        guard privileged else { error = "Install AppVault Decryptor from the rootless jailbreak Sileo package on your iPhone. A normally sideloaded IPA cannot read or decrypt other installed apps."; return }
+        guard privileged else { error = "Install the AppVault rootless jailbreak DEB on your jailbroken iPhone. A normally sideloaded IPA cannot read or decrypt other installed apps."; return }
         busy = true; status = "Reading installed app bundles"
         worker.async {
             do {
@@ -98,11 +98,6 @@ struct DecryptionView: View {
                         Button("Decrypt and Export IPA") { service.decrypt(app) }.disabled(service.busy)
                     }
                 }
-            }
-            Section("Installed Version") {
-                let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-                let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-                Text("AppVault Decryptor \(version) (\(build))").textSelection(.enabled)
             }
             Section { NavigationLink("Decryption Report") { DiscoveryReport(text: service.report) } }
         }.navigationTitle("Decrypt Installed Apps")

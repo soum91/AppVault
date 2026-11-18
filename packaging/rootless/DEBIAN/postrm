@@ -1,5 +1,5 @@
 #!/bin/sh
 if [ -x /var/jb/usr/bin/uicache ]; then
-    /var/jb/usr/bin/uicache -u /var/jb/Applications/AppVaultDecryptor.app
+    /var/jb/usr/bin/uicache -u /var/jb/Applications/AppVault.app
 fi
 exit 0

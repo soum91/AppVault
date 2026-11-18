@@ -11,10 +11,9 @@ install -d -m 0700 -o mobile -g mobile "$store"
 install -d -m 0700 -o mobile -g mobile "$store/AuthenticationRuntime"
 install -d -m 0700 -o mobile -g mobile "$store/Temporary"
 install -d -m 0700 -o mobile -g mobile "$store/Exports"
-# The old privileged AppVault.app was replaced with AppVaultDecryptor.app.
-# Only remove the exact former rootless icon; never touch an installed stock IPA.
 if [ -x /var/jb/usr/bin/uicache ]; then
-    /var/jb/usr/bin/uicache -u /var/jb/Applications/AppVault.app || true
-    /var/jb/usr/bin/uicache -p /var/jb/Applications/AppVaultDecryptor.app
+    # 0.6.5/0.6.6 installed AppVaultDecryptor.app; drop that stale icon.
+    /var/jb/usr/bin/uicache -u /var/jb/Applications/AppVaultDecryptor.app 2>/dev/null || true
+    /var/jb/usr/bin/uicache -p /var/jb/Applications/AppVault.app
 fi
 exit 0
