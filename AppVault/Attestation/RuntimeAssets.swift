@@ -7,7 +7,7 @@ actor RuntimeAssets {
     private static let instance = RuntimeAssets()
     private var ready = false
     static let revision = "81dd1f747e71b31629979e2c1de0fe234fe7de39"
-    static var directory: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("AuthenticationRuntime/" + revision, isDirectory: true) }
+    static var directory: URL { VaultStorage.runtime.appendingPathComponent(revision, isDirectory: true) }
     nonisolated static var rootIfReady: URL? { FileManager.default.fileExists(atPath: directory.appendingPathComponent("index.html").path) ? directory : nil }
     static func prepare() async throws { try await instance.install() }
     private static let hashes: [String: String] = [
@@ -21,7 +21,7 @@ actor RuntimeAssets {
 ]
     private func install() async throws {
         if ready { return }
-        try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+        try VaultStorage.ensureWritable(Self.directory, operation: "preparing authentication runtime")
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil; configuration.httpShouldSetCookies = false; configuration.urlCache = nil
         let session = URLSession(configuration: configuration)
@@ -36,7 +36,12 @@ actor RuntimeAssets {
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw StoreProtocol.failure("runtime_download", "Authentication components could not be downloaded from the pinned source.") }
             let data = try Data(contentsOf: temporary, options: .mappedIfSafe)
             guard Self.hash(data) == digest else { throw StoreProtocol.failure("runtime_integrity", "Authentication component integrity check failed. Sign-in was stopped.") }
-            try data.write(to: destination, options: .atomic)
+            do { try data.write(to: destination, options: .atomic) }
+            catch {
+                let cause = error as NSError
+                throw VaultStorageError(operation: "saving " + name, folder: Self.directory.path,
+                                        domain: cause.domain, code: cause.code)
+            }
         }
         ready = true
     }
