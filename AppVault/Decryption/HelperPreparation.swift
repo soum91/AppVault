@@ -64,7 +64,7 @@ enum HelperPreparation {
             progress("Recording encrypted payload integrity")
             var hashes: [String: String] = [:]
             for file in try HelperPaths.files(target) {
-                hashes[String(file.path.dropFirst(target.path.count + 1))] = try HelperPaths.hash(file)
+                hashes[try HelperPaths.relativePath(file, under: target)] = try HelperPaths.hash(file)
             }
             let display = info["CFBundleDisplayName"] as? String ?? info["CFBundleName"] as? String ?? id
             let record = HelperManifest(schema: 1, appName: app.lastPathComponent, bundleID: id, displayName: display, hashes: hashes)
