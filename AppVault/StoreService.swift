@@ -47,6 +47,9 @@ enum VaultKeychain {
     @Published var status = "Ready"
     @Published var error: String?
     @Published var needsCode = false
+    // A trusted-device code can be entered before Apple's Store endpoint
+    // returns an HSA challenge. This does not simulate an approval session.
+    @Published var manualCodeEntry = false
     @Published var canRequestApproval = false
     @Published var verificationNotice = ""
     private var backendTrace = "No Store response recorded."
@@ -84,8 +87,22 @@ enum VaultKeychain {
     func refreshDownloads() {
         downloads = ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "ipa" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
+    func showManualCodeEntry() {
+        guard !busy else { return }
+        manualCodeEntry = true
+        verificationNotice = "On a trusted Apple device, use Apple Account settings to get a six-digit verification code. Enter it below and sign in. A push approval can be requested only after Apple issues an authentication challenge."
+    }
+    func hideManualCodeEntry() {
+        guard !busy else { return }
+        manualCodeEntry = false
+        code = ""
+        if !needsCode { verificationNotice = "" }
+    }
     func signIn() {
         guard !email.isEmpty, !password.isEmpty else { error = "Enter your Apple Account email and password."; return }
+        if !code.isEmpty && (code.count != 6 || !code.allSatisfy({ $0.isASCII && $0.isNumber })) {
+            error = "Enter a valid six-digit verification code."; return
+        }
         do { try VaultStorage.ensureWritable(VaultStorage.runtime, operation: "Apple Account sign-in") }
         catch { fail(error); return }
         let email = self.email, password = self.password, code = self.code
@@ -126,10 +143,10 @@ enum VaultKeychain {
             try VaultKeychain.write(nil, account: "direct-state")
             try VaultKeychain.write(nil, account: "state") // Remove prior emulator sessions too.
             await client.signOut()
-            self.email = ""; self.password = ""; self.code = ""; self.signedIn = false; self.needsCode = false
+            self.email = ""; self.password = ""; self.code = ""; self.signedIn = false; self.needsCode = false; self.manualCodeEntry = false
         }
     }
-    func cancel() { operation?.cancel(); Task { await client?.clearVerification() }; canRequestApproval = false; verificationNotice = ""; password = ""; code = ""; needsCode = false; status = "Cancellation requested" }
+    func cancel() { operation?.cancel(); Task { await client?.clearVerification() }; canRequestApproval = false; verificationNotice = ""; password = ""; code = ""; needsCode = false; manualCodeEntry = false; status = "Cancellation requested" }
     private func run(_ phase: String, work: @escaping @MainActor (DirectAppleStore) async throws -> Void) {
         guard !busy else { return }
         guard let client else { error = "Secure storage is unavailable. Resolve the Keychain error before signing in."; return }
@@ -144,11 +161,11 @@ enum VaultKeychain {
                 try Task.checkCancellation()
                 let state = await client.snapshot()
                 try VaultKeychain.write(JSONEncoder().encode(state), account: "direct-state")
-                signedIn = state.account != nil; if signedIn { needsCode = false; canRequestApproval = false; verificationNotice = "" }; status = "Completed"
+                signedIn = state.account != nil; if signedIn { needsCode = false; manualCodeEntry = false; canRequestApproval = false; verificationNotice = "" }; status = "Completed"
                 backendTrace = await client.diagnostics()
             } catch {
                 if let failure = error as? StoreFailure, failure.code == "two_factor" {
-                    needsCode = true; verificationNotice = failure.message
+                    needsCode = true; manualCodeEntry = true; verificationNotice = failure.message
                     canRequestApproval = await client.verificationAvailable()
                     backendTrace = await client.diagnostics()
                     status = "Waiting for verification"

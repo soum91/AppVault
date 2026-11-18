@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.6.3] - 2026-11-18
+
+- Expose existing Apple Account verification-code entry for both sandboxed and
+  rootless builds without waiting for a challenge to show the field.
+- Keep server-issued trusted-device approval and HSA2 session verification gated
+  by valid Apple response context, rather than inventing a push request.
+- Validate six-digit codes and clear manually entered codes on dismissal.
+- Add regression checks for the manual code UI and retained signed Store flow.
+- SAP/WebKit signer failures before 2FA remain unresolved until reproduced with
+  a current-version on-device Backend Report.
+
+
 ## [v0.6.2] - 2026-11-18
 
 - Display locally produced `ToolError` descriptions instead of dropping them and showing `AppVaultToolError code 0`.

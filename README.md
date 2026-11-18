@@ -1,3 +1,17 @@
+## Manual Apple Account verification code (0.6.3)
+
+The Account screen now offers **Use a Verification Code** before a server
+challenge appears. On a device already trusted by Apple, obtain a six-digit
+verification code from Apple Account security settings, enter it in AppVault
+and select **Sign In with Code**. If Apple itself issues a valid HSA2 challenge,
+AppVault retains the existing **Request Approval on Other Devices** flow and
+verifies the code with Apple. Without that session, the app does not claim it
+has sent a notification to other devices.
+
+Manual code entry is distinct from local SAP signing. If the signer fails,
+AppVault still cannot send its login request; consult Settings > Backend Report.
+Passwords and codes are not saved.
+
 ## Authentication failure visibility (0.6.2)
 
 AppVault now displays its own localized tool errors instead of `AppVaultToolError code 0` and safely labels the failing local signer/WebKit code. Use **Settings > Backend Report** to inspect the last stage without publishing your Apple Account credentials. This improves diagnosis, not Apple authentication compatibility itself.
