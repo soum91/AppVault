@@ -2,9 +2,9 @@ import Foundation
 import ZIPFoundation
 
 enum HelperPreparation {
-    static func prepare(ipa: URL, template: URL, folder: URL, progress: (String) -> Void) throws -> URL {
+    static func prepare(ipa: URL, template: URL, folder: URL, workspace: URL? = nil, progress: (String) -> Void) throws -> URL {
         let fm = FileManager.default
-        let work = fm.temporaryDirectory.appendingPathComponent("stock-helper-" + UUID().uuidString)
+        let work = (workspace ?? fm.temporaryDirectory).appendingPathComponent("stock-helper-" + UUID().uuidString)
         var attempted: URL?
         defer { try? fm.removeItem(at: work) }
         do {
@@ -55,7 +55,8 @@ enum HelperPreparation {
                     let out = target.appendingPathComponent(path)
                     if !fm.fileExists(atPath: out.path) {
                         try fm.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
-                        try fm.copyItem(at: target.appendingPathComponent(first), to: out)
+                        // Materialize an independent license resource for nested bundles.
+                        try Data(contentsOf: target.appendingPathComponent(first)).write(to: out, options: .atomic)
                     }
                 }
             }
