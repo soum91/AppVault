@@ -57,8 +57,11 @@ struct DecryptableApp: Identifiable, Sendable {
                 guard source.path.hasPrefix("/private/var/containers/Bundle/Application/") || source.path.hasPrefix("/var/containers/Bundle/Application/") else {
                     throw VaultFailure(message: "Only installed user app bundles can be exported.")
                 }
-                let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("IPAs")
-                let out = try IPAExportEngine.export(source: source, appName: source.lastPathComponent, identifier: app.id, folder: folder) { message in
+                let folder = VaultStorage.exports.appendingPathComponent("IPAs", isDirectory: true)
+                try VaultStorage.ensureWritable(folder, operation: "decrypted IPA export")
+                try VaultStorage.ensureWritable(VaultStorage.workspace, operation: "IPA staging")
+                let out = try IPAExportEngine.export(source: source, appName: source.lastPathComponent,
+                    identifier: app.id, folder: folder, workspace: VaultStorage.workspace) { message in
                     DispatchQueue.main.async { self.status = message; self.log += message + "\n" }
                 }
                 DispatchQueue.main.async { self.busy = false; self.output = out; self.status = "Export complete" }
