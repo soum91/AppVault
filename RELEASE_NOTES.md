@@ -1,12 +1,14 @@
-# AppVault 0.6.7 (20): AppVault and sign-in restored to the rootless DEB
+# AppVault 0.6.8 (21): signer environment and WebContent crash diagnostics
 
-0.6.5 replaced the rootless DEB's AppVault app with a separate AppVault Decryptor app, and 0.6.6 kept that layout. This release undoes it: the DEB installs **AppVault.app** again, with Search, Account sign-in, IPA downloads, Decrypt Installed Apps and Settings, as it did through 0.6.4.
+The 0.6.7 Backend Report from Dopamine/iOS 16.1.1 showed `runtime=local WebKit/WASM (in-process JIT unavailable)`: JavaScriptCore reported no WebAssembly, AppVault fell back to WebKit, and WebContent exited again. The 0.6.7 DEB binary does carry `dynamic-codesigning` (checked in the released package), so the reason is on the device side. This release adds the facts needed to tell which.
 
 Changes:
-- Remove the `AppVaultDecryptor` target, `Decryptor/` sources and `Tests/RootlessSplit/test_split.py`. `project.yml`, `.github/workflows/ios-build.yml`, `packaging/rootless/DEBIAN/*` and `AppVault/Decryption/DecryptionService.swift` return to their 0.6.4 layout, with version 0.6.7 (20).
-- The DEB postinst unregisters the stale `AppVaultDecryptor.app` icon left by 0.6.5/0.6.6, then registers `AppVault.app`.
-- Keep the in-process sign-in fix from 0.6.6: on rootless installs `LocalSAPSigner` runs the pinned SAP runtime with JavaScriptCore (`InProcessSAPRuntime.swift`), using the DEB's `dynamic-codesigning` entitlement, because WebKit's WebContent exits at spawn there. If JavaScriptCore reports no WebAssembly, it falls back to WebKit and records `jsc-wasm-unavailable`. The sideloaded IPA keeps WebKit sign-in.
-- The `APPVAULT_ROOTLESS` compile flag is removed; rootless behaviour is chosen at runtime. During in-process signing a progress card replaces the WebKit view.
-- Release assets: `AppVault-0.6.7-20.ipa` and `AppVault-0.6.7-20-rootless.deb`.
+- New `AppVault/Attestation/RuntimeProbe.swift`, appended to Settings > Backend Report:
+  - runtime values of the `dynamic-codesigning` and `platform-application` entitlements (SecTask);
+  - code-signing flags from `csops` (VALID, PLATFORM_BINARY, DEBUGGED and others);
+  - a one-page `MAP_JIT` mapping probe with errno (rootless installs only);
+  - JavaScriptCore's own WebAssembly availability and a minimal module compile;
+  - on rootless installs, a summary of the newest WebContent crash reports and jetsam events from the last six hours (exception, termination namespace/code/reasons, application-specific info, top frames). No account data is read.
+- No sign-in logic changes. Login on the device is still expected to fail until these facts identify the blocker.
 
-**Verification boundary:** CI covers the shim layer, the source guards and both builds. Rootless sign-in on Dopamine/iOS 16.1.1 has not been confirmed on a device; Settings > Backend Report shows the active runtime and stages.
+**Verification boundary:** CI builds both packages. The probes have not run on a device yet.

@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.6.8] - 2026-11-18
+
+- Backend Report adds signer environment facts: runtime entitlements,
+  code-signing flags, a MAP_JIT probe and JavaScriptCore WebAssembly status.
+- Rootless installs also summarize recent WebContent crash and jetsam
+  reports. No sign-in logic changes; login is still unresolved.
+
 ## [v0.6.7] - 2026-11-18
 
 - Restore AppVault.app (with Account sign-in and downloads) as the rootless
