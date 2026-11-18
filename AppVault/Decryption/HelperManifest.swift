@@ -6,6 +6,23 @@ enum HelperPaths {
         !value.isEmpty && !value.hasPrefix("/") && !value.contains("\\") && !value.contains("\0") &&
         !value.split(separator: "/", omittingEmptySubsequences: false).contains(where: { $0 == ".." || $0 == "." || $0.isEmpty })
     }
+    /// The same temporary directory may be named /tmp by its caller and
+    /// /private/tmp by FileManager's enumerator. Compare canonical paths,
+    /// never string lengths from two different filesystem spellings.
+    static func relativePath(_ file: URL, under root: URL) throws -> String {
+        let base = root.standardizedFileURL.resolvingSymlinksInPath().path
+        let item = file.standardizedFileURL.resolvingSymlinksInPath().path
+        let prefix = base.hasSuffix("/") ? base : base + "/"
+        guard item.hasPrefix(prefix) else {
+            throw HelperFailure(message: "File escaped its payload root")
+        }
+        let relative = String(item.dropFirst(prefix.count))
+        guard safe(relative) else {
+            throw HelperFailure(message: "Invalid relative payload path")
+        }
+        return relative
+    }
+
     static func hash(_ url: URL) throws -> String {
         let file = try FileHandle(forReadingFrom: url); defer { try? file.close() }
         var digest = SHA256()
