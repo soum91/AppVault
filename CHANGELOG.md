@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.7.1] - 2026-11-18
+
+## Verified changes since v0.7.0
+
+- Support Unicorn callback tables and exception propagation in the interpreter ([`0c3f8472`](https://github.com/soum91/AppVault/commit/0c3f8472d6b2ba01a3651277a482d03056acc7a4); `AppVault/Attestation/Wasm3Polyfill.swift`, `AppVault/Wasm3/AVWasm3Bridge.c`, `AppVault/Wasm3/AVWasm3Bridge.h`, and 1 more)
+- Run both pinned signer modules in the rootless WebAssembly interpreter ([`334b53cf`](https://github.com/soum91/AppVault/commit/334b53cf706fe3a621118725a6814e45fd5899d3); `.github/workflows/ios-build.yml`, `AppVault/Attestation/InProcessSAPRuntime.swift`, `AppVault/Attestation/Wasm3Polyfill.swift`, and 8 more)
+- Embed wasm3 interpreter polyfill for rootless DEB login (0.7.1, build 24) ([`dc745400`](https://github.com/soum91/AppVault/commit/dc74540053b2d1e71bbea83d0086518d5f2daa36); `.github/workflows/ios-build.yml`, `AppVault/Attestation/InProcessSAPRuntime.swift`, `AppVault/Attestation/Wasm3Polyfill.swift`, and 44 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.7.0...v0.7.1)
+
 ## 0.7.1 (24)
 
 - Add the interpreter fallback and exercise the two pinned signer modules before packaging. Physical iOS 16.1.1 sign-in remains unverified.
