@@ -40,7 +40,7 @@ enum IPAExportEngine {
                 let encrypted = AVInspectMachO(binary.path, &detail, detail.count)
                 guard encrypted >= 0 else { throw IPAExportFailure(message: "\(binary.lastPathComponent): \(String(cString: detail))") }
                 guard encrypted > 0 else { continue }
-                let relative = String(binary.path.dropFirst(source.path.count + 1))
+                let relative = try HelperPaths.relativePath(binary, under: source)
                 let target = destination.appendingPathComponent(relative)
                 progress("Decrypting \(relative)")
                 try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: target.path)
