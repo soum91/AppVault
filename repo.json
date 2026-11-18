@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "AppVault and official IPA download tools",
-  "description": "Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified.",
+  "description": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
@@ -10,25 +10,25 @@
       "name": "AppVault",
       "bundleIdentifier": "com.soum91.appvault",
       "developerName": "soum91",
-      "subtitle": "IPA downloads and jailbreak decryption",
-      "localizedDescription": "Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified.",
+      "subtitle": "IPA downloads and stock decryption helpers",
+      "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.",
       "tintColor": "#4F46E5",
       "category": "utilities",
       "versions": [
         {
-          "version": "0.5.0",
-          "buildVersion": "12",
-          "date": "2026-11-17",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.5.0/AppVault-0.5.0.ipa",
-          "size": 549417,
+          "version": "0.6.0",
+          "buildVersion": "13",
+          "date": "2026-11-18",
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.6.0/AppVault-0.6.0.ipa",
+          "size": 826719,
           "minOSVersion": "16.0",
-          "localizedDescription": "Apple Store IPA downloads and separate installed-app decryption export in the rootless jailbreak package. Ordinary sideloaded IPA downloads remain encrypted. Jailbreak decryption requires a matching App Store license; physical-device exports remain unverified."
+          "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified."
         }
       ],
-      "version": "0.5.0",
-      "versionDate": "2026-11-17",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.5.0/AppVault-0.5.0.ipa",
-      "size": 549417,
+      "version": "0.6.0",
+      "versionDate": "2026-11-18",
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.6.0/AppVault-0.6.0.ipa",
+      "size": 826719,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
