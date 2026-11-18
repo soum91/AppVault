@@ -16,9 +16,12 @@ enum RuntimeProbe {
         lines.append("  code-signing flags: \(codeSigningFlags())")
         lines.append("  MAP_JIT probe: \(VaultStorage.isRootless ? mapJITProbe() : "skipped (sandboxed)")")
         lines.append("  JavaScriptCore: \(javaScriptCoreProbe())")
+        lines.append("  JSC env: useJIT=\(environment("JSC_useJIT")) useWebAssembly=\(environment("JSC_useWebAssembly"))")
         if VaultStorage.isRootless { lines.append(contentsOf: crashReports()) }
         return lines.joined(separator: "\n")
     }
+
+    private static func environment(_ key: String) -> String { getenv(key).map { String(cString: $0) } ?? "unset" }
 
     // MARK: - Entitlements and code signing
 
@@ -52,7 +55,12 @@ enum RuntimeProbe {
         let size = Int(getpagesize())
         errno = 0
         let pointer = mmap(nil, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANON | 0x0800 /* MAP_JIT */, -1, 0)
-        if pointer == nil || pointer == UnsafeMutableRawPointer(bitPattern: -1) { return "failed (errno \(errno))" }
+        if pointer == nil || pointer == UnsafeMutableRawPointer(bitPattern: -1) {
+            let code = errno
+            // iOS allows one MAP_JIT region per process; EINVAL usually means
+            // JavaScriptCore already holds it.
+            return code == EINVAL ? "EINVAL (a JIT region likely already exists, e.g. JavaScriptCore's)" : "failed (errno \(code))"
+        }
         munmap(pointer, size)
         return "ok"
     }

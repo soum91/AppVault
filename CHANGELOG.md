@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.6.9] - 2026-11-18
+
+- Rootless installs set JSC_useJIT and JSC_useWebAssembly at launch so
+  JavaScriptCore enables WebAssembly for the in-process signer (0.6.8 showed
+  JIT granted but WebAssembly undefined).
+- Backend Report shows those values and explains a MAP_JIT EINVAL result.
+- Device sign-in remains unverified.
+
 ## [v0.6.8] - 2026-11-18
 
 - Backend Report adds signer environment facts: runtime entitlements,
