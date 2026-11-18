@@ -60,7 +60,7 @@ struct HelperManifest: Codable {
         let files = try HelperPaths.files(root)
         guard files.count == hashes.count else { throw HelperFailure(message: "Embedded payload file count changed during signing. Use the payload-preserving EmberSign build.") }
         for file in files {
-            let path = String(file.path.dropFirst(root.path.count + 1))
+            let path = try HelperPaths.relativePath(file, under: root)
             guard HelperPaths.safe(path), let expected = hashes[path], try HelperPaths.hash(file) == expected else {
                 throw HelperFailure(message: "Embedded payload changed: \(path). The signer must preserve EmbeddedPayload as resources.")
             }
