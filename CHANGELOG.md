@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.7.2] - 2026-11-19
+
+## Verified changes since v0.7.1
+
+- Upload installable test packages before the download authorization release gate ([`5df10126`](https://github.com/soum91/AppVault/commit/5df10126bb94cb40203743933e1e85e7f9a29979); `.github/workflows/ios-build.yml`, `Tests/RuntimeUI/test_interpreted_runtime.py`)
+- Stage Files imports locally before opening an IPA for helper preparation ([`92b5462c`](https://github.com/soum91/AppVault/commit/92b5462c17921e882b2159c00acc4b075b3e4c4e); `.github/workflows/ios-build.yml`, `AppVault/BackupHomeView.swift`, `AppVault/Decryption/IPAFileSnapshot.swift`, and 3 more)
+- Give interpreted download authorization a separately bounded execution budget ([`49b5e62e`](https://github.com/soum91/AppVault/commit/49b5e62e9f301cfdaf1d09e43be5c2c899eaf046); `AppVault/Attestation/LocalSAPSigner.swift`, `Tests/RuntimeUI/test_interpreted_runtime.py`)
+- Keep IPA downloads independent of session saves and preserve the failing stage ([`2c8d19bd`](https://github.com/soum91/AppVault/commit/2c8d19bda5909f0ce79481602ab18730e833ace9); `.github/workflows/ios-build.yml`, `AppVault/Attestation/LocalSAPSigner.swift`, `AppVault/DirectAppleStore.swift`, and 6 more)
+
+[Inspect exact code changes](https://github.com/soum91/AppVault/compare/v0.7.1...v0.7.2)
+
 ## AppVault 0.7.2 (25)
 
 - Copy Files imports into AppVault-owned staging before helper preparation. List installed-app export first on rootless devices.
