@@ -28,8 +28,12 @@ struct BackupHomeView: View {
             NavigationStack {
                 List {
                     Section {
-                        NavigationLink("Decrypt on Stock iOS") { StockPreparationView(downloads: store.downloads) }
-                        NavigationLink("Decrypt Installed Apps (Jailbreak)") { DecryptionView() }
+                        if VaultStorage.isRootless {
+                            NavigationLink("Decrypt Installed Apps (Jailbreak)") { DecryptionView() }
+                            NavigationLink("Prepare Helper from IPA (Stock iOS)") { StockPreparationView(downloads: store.downloads) }
+                        } else {
+                            NavigationLink("Decrypt on Stock iOS") { StockPreparationView(downloads: store.downloads) }
+                        }
                     }
                     if store.downloads.isEmpty { Text("Saved IPA files will appear here.").foregroundStyle(.secondary) }
                     ForEach(store.downloads, id: \.self) { url in

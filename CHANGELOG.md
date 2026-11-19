@@ -2,6 +2,8 @@
 
 ## AppVault 0.7.2 (25)
 
+- Copy Files imports into AppVault-owned staging before helper preparation. List installed-app export first on rootless devices.
+
 - Keep an authorized IPA download independent of Keychain session saves. Skip redundant saves, keep a live session if persistence fails, and retain the original download error if the operation fails.
 - Continue with an in-memory Store proof if the Keychain temporarily disallows interaction. Credentials and session data remain in the Keychain when persisted.
 - Show separate progress for download authorization, the Store request, CDN transfer and final IPA validation. A cancellation preserves the last active stage in Backend Report.

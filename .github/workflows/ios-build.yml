@@ -42,19 +42,6 @@ jobs:
           cd /tmp/appvault-runtime-source/iPadn-iOS
           python3 scripts/assemble_runtime.py
           node scripts/runtime_smoke_test.cjs
-      - name: Run the rootless signer with native WebAssembly disabled
-        env:
-          APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
-        run: |
-          mkdir -p build/host-wasm3
-          for source in AppVault/Wasm3/*.c; do
-            xcrun clang -O2 -std=gnu11 -c "$source" -o "build/host-wasm3/$(basename "$source" .c).o"
-          done
-          xcrun swiftc -O -swift-version 5 -D APPVAULT_INTERPRETER_TEST \
-            SignerHelper/main.swift SignerHelper/Support.swift \
-            AppVault/Attestation/InProcessSAPRuntime.swift AppVault/Attestation/Wasm3Polyfill.swift \
-            -import-objc-header AppVault/Wasm3/AVWasm3Bridge.h build/host-wasm3/*.o -o build/test-signer
-          python3 Tests/RuntimeUI/test_interpreted_runtime.py build/test-signer "$APPVAULT_RUNTIME"
       - name: Verify live Store device provisioning and signed authentication
         env:
           APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
@@ -63,7 +50,7 @@ jobs:
         run: |
           mkdir -p /tmp/appvault-helper-tests/Sources/HelperPreparation
           cp -R Tests/HelperPreparation/. /tmp/appvault-helper-tests/
-          cp AppVault/Decryption/HelperManifest.swift AppVault/Decryption/HelperPreparation.swift /tmp/appvault-helper-tests/Sources/HelperPreparation/
+          cp AppVault/Decryption/HelperManifest.swift AppVault/Decryption/HelperPreparation.swift AppVault/Decryption/IPAFileSnapshot.swift /tmp/appvault-helper-tests/Sources/HelperPreparation/
           swift test --package-path /tmp/appvault-helper-tests
       - name: Generate helper and app projects
         run: |
@@ -81,6 +68,19 @@ jobs:
           (cd helper-template && zip -qry ../Generated/DecryptHelper.zip Payload)
       - name: Build device app
         run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Run the rootless signer with native WebAssembly disabled
+        env:
+          APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
+        run: |
+          mkdir -p build/host-wasm3
+          for source in AppVault/Wasm3/*.c; do
+            xcrun clang -O2 -std=gnu11 -c "$source" -o "build/host-wasm3/$(basename "$source" .c).o"
+          done
+          xcrun swiftc -O -swift-version 5 -D APPVAULT_INTERPRETER_TEST \
+            SignerHelper/main.swift SignerHelper/Support.swift \
+            AppVault/Attestation/InProcessSAPRuntime.swift AppVault/Attestation/Wasm3Polyfill.swift \
+            -import-objc-header AppVault/Wasm3/AVWasm3Bridge.h build/host-wasm3/*.o -o build/test-signer
+          python3 Tests/RuntimeUI/test_interpreted_runtime.py build/test-signer "$APPVAULT_RUNTIME"
       - name: Package IPA with entitlement template
         run: |
           mkdir -p Payload

@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 @MainActor final class StockPreparationService: ObservableObject {
     @Published var busy = false
@@ -12,18 +13,32 @@ import UniformTypeIdentifiers
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         return "AppVault \(version) (\(build))\niOS \(UIDevice.current.systemVersion)\nStock helper preparation\n\(log)\nPhysical-device helper signing/decryption: unverified"
     }
-    func prepare(_ input: URL) {
+    func prepare(_ input: URL, fromFiles: Bool = false) {
         guard !busy else { return }
         guard let template = Bundle.main.url(forResource: "DecryptHelper", withExtension: "zip") else { error = "This build has no helper template. Install the complete AppVault release."; return }
-        output = nil; error = nil; busy = true; log = "Preparing local helper. No credentials or packages are uploaded.\n"
+        output = nil; error = nil; busy = true; status = "Preparing IPA"; log = "Preparing local helper. No credentials or packages are uploaded.\n"
         let folder = VaultStorage.exports.appendingPathComponent("Helpers", isDirectory: true)
         DispatchQueue.global(qos: .userInitiated).async {
-            let scoped = input.startAccessingSecurityScopedResource()
-            defer { if scoped { input.stopAccessingSecurityScopedResource() } }
+            var importedDirectory: URL?
+            defer {
+                if let importedDirectory { try? FileManager.default.removeItem(at: importedDirectory) }
+            }
             do {
                 try VaultStorage.ensureWritable(folder, operation: "stock helper IPA export")
                 try VaultStorage.ensureWritable(VaultStorage.workspace, operation: "stock helper staging")
-                let out = try HelperPreparation.prepare(ipa: input, template: template,
+                let localInput: URL
+                if fromFiles {
+                    DispatchQueue.main.async {
+                        self.status = "Copying IPA from Files"
+                        self.log += "Copying IPA from Files\n"
+                    }
+                    let directory = VaultStorage.workspace.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                    importedDirectory = directory
+                    localInput = try IPAFileSnapshot.copy(input, to: directory)
+                } else {
+                    localInput = input
+                }
+                let out = try HelperPreparation.prepare(ipa: localInput, template: template,
                                                        folder: folder, workspace: VaultStorage.workspace) { message in
                     DispatchQueue.main.async { self.status = message; self.log += message + "\n" }
                 }
@@ -62,9 +77,44 @@ struct StockPreparationView: View {
             }
             Section { NavigationLink("Preparation Report") { DiscoveryReport(text: service.report) } }
         }.navigationTitle("Decrypt on Stock iOS")
-        .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "ipa") ?? .zip, .zip]) { result in
-            switch result { case .success(let url): service.prepare(url); case .failure(let error): service.error = error.localizedDescription }
+        .sheet(isPresented: $importing) {
+            IPADocumentPicker { url in
+                importing = false
+                if let url { service.prepare(url, fromFiles: true) }
+            }
         }
         .alert("Helper Preparation", isPresented: Binding(get: { service.error != nil }, set: { if !$0 { service.error = nil } })) { Button("OK") { service.error = nil } } message: { Text(service.error ?? "") }
+    }
+}
+
+
+// Ask Files for an imported copy. The helper builder only reads its own
+// local snapshot and never reopens a document-provider URL.
+private struct IPADocumentPicker: UIViewControllerRepresentable {
+    let completed: (URL?) -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [UTType(filenameExtension: "ipa") ?? .zip, .zip],
+            asCopy: true
+        )
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
+    func makeCoordinator() -> Delegate { Delegate(completed: completed) }
+
+    final class Delegate: NSObject, UIDocumentPickerDelegate {
+        let completed: (URL?) -> Void
+        init(completed: @escaping (URL?) -> Void) { self.completed = completed }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            completed(urls.first)
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            completed(nil)
+        }
     }
 }

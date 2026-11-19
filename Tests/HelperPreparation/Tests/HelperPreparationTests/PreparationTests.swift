@@ -28,7 +28,10 @@ final class PreparationTests: XCTestCase {
     }
     func testPreparedHelperPreservesTargetAndReplicatesLicense() throws {
         try fixture { ipa, template, root in
-            let output = try HelperPreparation.prepare(ipa: ipa, template: template, folder: root.appendingPathComponent("out")) { _ in }
+            let copy = try IPAFileSnapshot.copy(ipa, to: root.appendingPathComponent("staged"))
+            XCTAssertEqual(try Data(contentsOf: copy), try Data(contentsOf: ipa))
+            try fm.removeItem(at: ipa)
+            let output = try HelperPreparation.prepare(ipa: copy, template: template, folder: root.appendingPathComponent("out")) { _ in }
             let extracted = root.appendingPathComponent("check")
             try fm.createDirectory(at: extracted, withIntermediateDirectories: true)
             try fm.unzipItem(at: output, to: extracted)
