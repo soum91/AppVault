@@ -57,7 +57,8 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
                         await loadSapSigner({proxyURL: proxy});
                         const proof = JSON.parse(await sapStoreProofHeaders(state, {proxyURL: proxy}));
                         if (typeof sapWasmPrepareSetup !== "function") throw Error("Go signer did not initialize");
-                        return JSON.stringify({provisioned: proof.provisioned, signerReady: true});
+                        const authorization = await sapGenerateKBSync("A10203040506", "123456789", {proxyURL: proxy});
+                        return JSON.stringify({provisioned: proof.provisioned, signerReady: true, authorization: authorization.length > 0});
                         """
                         request = {
                             "id": 1, "script": script,
@@ -70,9 +71,9 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
                         process.stdin.flush()
                     elif message["type"] == "result":
                         assert message["ok"], message
-                        assert json.loads(message["value"]) == {"provisioned": False, "signerReady": True}
+                        assert json.loads(message["value"]) == {"provisioned": False, "signerReady": True, "authorization": True}
                         assert served == {"/runtime/sap.wasm", "/runtime/libCoreADI.so", "/runtime/libstoreservicescore.so"}
-                        print("PASS: both pinned WASM modules and local Store state initialized under the Swift interpreter bridge")
+                        print("PASS: both pinned WASM modules initialized, and synthetic download authorization generated under the Swift interpreter bridge")
                         break
                 else:
                     raise RuntimeError("Signer exited before producing its result")

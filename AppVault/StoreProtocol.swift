@@ -8,7 +8,7 @@ struct StoreApp: Codable, Identifiable {
     let price: Double?
     var id: Int64 { trackId }
 }
-struct StoreAccount: Codable {
+struct StoreAccount: Codable, Equatable {
     let email: String
     let token: String
     let dsid: String

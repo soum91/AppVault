@@ -1,3 +1,4 @@
+import Security
 // Adapted from mengangs/ipadn, pinned 81dd1f747e71b31629979e2c1de0fe234fe7de39. GPL-2.0-or-later.
 import Foundation
 import WebKit
@@ -185,7 +186,13 @@ final class LocalSAPSigner: NSObject, ObservableObject {
         updated.updatedAt = Date()
         all[normalizedGUID] = updated
         storeProofRecords = all
-        try StoreProofStore.save(all)
+        do {
+            try StoreProofStore.save(all)
+        } catch let error as NSError where error.domain == NSOSStatusErrorDomain && error.code == Int(errSecInteractionNotAllowed) {
+            // The live record is already in memory. A locked Keychain can
+            // prevent persistence without invalidating this proof.
+            recordStage("store-proof-keychain-locked")
+        }
     }
 
     func storeProofHeaders(guid: String, useCache: Bool) async throws -> [String: String]? {

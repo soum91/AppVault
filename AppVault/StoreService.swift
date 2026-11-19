@@ -32,7 +32,7 @@ enum VaultKeychain {
         guard status == errSecSuccess else { throw failure(status) }
     }
     static func failure(_ status: OSStatus) -> NSError {
-        NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Secure storage failed (\(status)). Sign-in state was not saved."])
+        NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Secure storage failed (\(status)). The Keychain operation did not complete."])
     }
 }
 
@@ -59,12 +59,14 @@ enum VaultKeychain {
     private var client: DirectAppleStore?
     private var operation: Task<Void, Never>?
     private var lastFailure = "None"
+    private var sessionSaveNotice = ""
+    private var persistedState: DirectStoreState?
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     var folder: URL { VaultStorage.exports.appendingPathComponent("IPAs", isDirectory: true) }
     var report: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
-        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nInstallation: \(VaultStorage.isRootless ? "rootless" : "sandboxed")\nStorage: \(VaultStorage.base.path)\nBackend: local SAP + Store AMD attestation; native Apple HTTPS\nUser-enabled JIT: not required; authentication runtime: \(LocalSAPSigner.shared.runtimeDescription)\nStage: \(status)\nLast failure: \(lastFailure)\n\(backendTrace)\n\(LocalSAPSigner.shared.diagnosticSummary)\n\(RuntimeProbe.report())\nPhysical-device authentication and exports: unverified"
+        return "AppVault \(version) (\(build))\nDevice: \(UIDevice.current.model)\nOS: \(UIDevice.current.systemVersion)\nInstallation: \(VaultStorage.isRootless ? "rootless" : "sandboxed")\nStorage: \(VaultStorage.base.path)\nBackend: local SAP + Store AMD attestation; native Apple HTTPS\nUser-enabled JIT: not required; authentication runtime: \(LocalSAPSigner.shared.runtimeDescription)\nStage: \(status)\nLast failure: \(lastFailure)\n\(sessionSaveNotice)\n\(backendTrace)\n\(LocalSAPSigner.shared.diagnosticSummary)\n\(RuntimeProbe.report())\nPhysical-device authentication and exports: unverified"
     }
     init() {
         do {
@@ -78,6 +80,7 @@ enum VaultKeychain {
                 try VaultKeychain.write(Data(identity.utf8), account: "identity")
             }
             let saved = try VaultKeychain.read("direct-state").map { try JSONDecoder().decode(DirectStoreState.self, from: $0) }
+            persistedState = saved
             client = DirectAppleStore(guid: identity, state: saved)
             signedIn = saved?.account != nil
             email = saved?.account?.email ?? ""
@@ -132,7 +135,10 @@ enum VaultKeychain {
         run("Requesting IPA") { client in
             try VaultStorage.ensureWritable(directory, operation: "saving an IPA download")
             let url = try await client.download(app, directory: directory, versionID: version) { [weak self] phase in
-                Task { @MainActor in self?.status = phase }
+                Task { @MainActor in
+                    guard let self, self.busy, self.operation?.isCancelled == false else { return }
+                    self.status = phase
+                }
             }
             self.refreshDownloads(); self.exported = url
         }
@@ -143,10 +149,16 @@ enum VaultKeychain {
             try VaultKeychain.write(nil, account: "direct-state")
             try VaultKeychain.write(nil, account: "state") // Remove prior emulator sessions too.
             await client.signOut()
+            self.persistedState = await client.snapshot()
+            self.sessionSaveNotice = ""
             self.email = ""; self.password = ""; self.code = ""; self.signedIn = false; self.needsCode = false; self.manualCodeEntry = false
         }
     }
-    func cancel() { operation?.cancel(); Task { await client?.clearVerification() }; canRequestApproval = false; verificationNotice = ""; password = ""; code = ""; needsCode = false; manualCodeEntry = false; status = "Cancellation requested" }
+    func cancel() {
+        operation?.cancel()
+        Task { await client?.clearVerification() }
+        canRequestApproval = false; verificationNotice = ""; password = ""; code = ""; needsCode = false; manualCodeEntry = false
+    }
     private func run(_ phase: String, work: @escaping @MainActor (DirectAppleStore) async throws -> Void) {
         guard !busy else { return }
         guard let client else { error = "Secure storage is unavailable. Resolve the Keychain error before signing in."; return }
@@ -160,7 +172,17 @@ enum VaultKeychain {
                 try await work(client)
                 try Task.checkCancellation()
                 let state = await client.snapshot()
-                try VaultKeychain.write(JSONEncoder().encode(state), account: "direct-state")
+                // Store work can succeed while iOS temporarily locks the Keychain.
+                // Keep the live session and retry saving it during the next successful operation.
+                if state != persistedState {
+                    do {
+                        try VaultKeychain.write(JSONEncoder().encode(state), account: "direct-state")
+                        persistedState = state
+                        sessionSaveNotice = ""
+                    } catch {
+                        sessionSaveNotice = "Apple session is available for this launch. Saving it to the Keychain failed [\((error as NSError).code)]."
+                    }
+                }
                 signedIn = state.account != nil; if signedIn { needsCode = false; manualCodeEntry = false; canRequestApproval = false; verificationNotice = "" }; status = "Completed"
                 backendTrace = await client.diagnostics()
             } catch {
@@ -172,17 +194,13 @@ enum VaultKeychain {
                     return
                 }
                 backendTrace = await client.diagnostics()
-                // Persist challenge cookies without saving a password or code.
-                if let state = try? JSONEncoder().encode(await client.snapshot()) {
-                    do { try VaultKeychain.write(state, account: "direct-state") } catch { fail(error); return }
-                }
                 fail(error)
             }
         }
     }
     private func fail(_ problem: Error) {
         let message: String
-        if problem is CancellationError || (problem as NSError).code == NSURLErrorCancelled {
+        if problem is CancellationError || ((problem as NSError).domain == NSURLErrorDomain && (problem as NSError).code == NSURLErrorCancelled) {
             message = "Operation cancelled. [cancelled]"
         } else if let storage = problem as? VaultStorageError {
             message = storage.localizedDescription
@@ -198,6 +216,8 @@ enum VaultKeychain {
             // Do not include arbitrary server bodies, URLs or account fields.
             if issue.domain == NSCocoaErrorDomain && issue.code == NSFileWriteNoPermissionError {
                 message = "Storage write denied (NSCocoaErrorDomain 513). This is a local file permission failure, not a rejected Apple Account password. Inspect the Backend Report."
+            } else if issue.domain == NSOSStatusErrorDomain, issue.userInfo[NSLocalizedDescriptionKey] != nil {
+                message = issue.localizedDescription
             } else {
                 message = "The operation failed (\(issue.domain), code \(issue.code)). Review the Backend Report for the failing stage."
             }

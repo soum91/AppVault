@@ -1,7 +1,7 @@
 import Foundation
 import ZIPFoundation
 
-struct StoreCookie: Codable {
+struct StoreCookie: Codable, Equatable {
     let name: String; let value: String; let domain: String; let path: String; let secure: Bool; let expires: Date?
     init(name: String, value: String, domain: String, path: String, secure: Bool, expires: Date?) {
         self.name = name; self.value = value; self.domain = domain; self.path = path; self.secure = secure; self.expires = expires
@@ -13,13 +13,36 @@ struct StoreCookie: Codable {
         return HTTPCookie(properties: values)
     }
 }
-struct DirectStoreState: Codable { var account: StoreAccount?; var cookies: [StoreCookie] }
+struct DirectStoreState: Codable, Equatable { var account: StoreAccount?; var cookies: [StoreCookie] }
 private final class NoAutomaticRedirects: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 private final class CDNDelegate: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         completionHandler(request.url.map(StoreProtocol.validCDNURL) == true ? request : nil)
+    }
+}
+private final class PackageDownloadProgress: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let report: @Sendable (String) -> Void
+    init(report: @escaping @Sendable (String) -> Void) { self.report = report }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(request.url.map(StoreProtocol.validCDNURL) == true ? request : nil)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let megabyte: Int64 = 1_048_576
+        guard totalBytesWritten / megabyte > (totalBytesWritten - bytesWritten) / megabyte else { return }
+        let received = totalBytesWritten / megabyte
+        if totalBytesExpectedToWrite > 0 {
+            report("Downloading IPA: \(received) of \(totalBytesExpectedToWrite / megabyte) MiB")
+        } else {
+            report("Downloading IPA: \(received) MiB received")
+        }
     }
 }
 actor DirectAppleStore {
@@ -221,7 +244,7 @@ actor DirectAppleStore {
     }
     func download(_ app: StoreApp, directory: URL, versionID: String, progress: @escaping @Sendable (String) -> Void) async throws -> URL {
         guard let account = state.account else { throw StoreProtocol.failure("sign_in_required", "Sign in to your Apple Account first.") }
-        progress("Requesting the IPA from Apple")
+        progress("Generating download authorization")
         let url = URL(string: "https://downloaddispatch.itunes.apple.com/WebObjects/DownloadDispatch.woa/wa/ent/download?guid=\(guid)")!
         let signer = await LocalSAPSigner.shared
         let sync = try await signer.kbsync(guid: guid, dsid: account.dsid, useCache: true)
@@ -230,6 +253,7 @@ actor DirectAppleStore {
             guard versionID.allSatisfy(\.isNumber) else { throw StoreProtocol.failure("invalid_version", "The external version identifier must contain digits only.") }
             payload["externalVersionId"] = versionID
         }
+        progress("Requesting the IPA from Apple")
         let (data, response) = try await attested(url, body: StoreProtocol.plist(payload), account: account)
         let dict = try StoreProtocol.dictionary(data, status: response.statusCode)
         if let failure = dict["failureType"], !String(describing: failure).isEmpty {
@@ -241,7 +265,8 @@ actor DirectAppleStore {
         progress("Downloading IPA from Apple's CDN")
         var req = URLRequest(url: downloadURL); req.setValue(StoreProtocol.userAgent, forHTTPHeaderField: "User-Agent"); req.setValue("buy", forHTTPHeaderField: "Apple-Download-Type")
         // This separate session has no account cookies, token, or DSID headers.
-        let (temporary, rawResponse) = try await cdn.download(for: req)
+        let downloadProgress = PackageDownloadProgress(report: progress)
+        let (temporary, rawResponse) = try await cdn.download(for: req, delegate: downloadProgress)
         defer { try? FileManager.default.removeItem(at: temporary) }
         guard let reply = rawResponse as? HTTPURLResponse, reply.statusCode == 200 else { throw StoreProtocol.failure("cdn_rejected", "Apple's CDN did not return a complete IPA.") }
         try Task.checkCancellation()
