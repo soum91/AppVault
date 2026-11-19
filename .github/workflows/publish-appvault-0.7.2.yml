@@ -1,0 +1,87 @@
+name: Publish AppVault 0.7.2 prerelease
+on:
+  push:
+    branches: [release/appvault-0.7.2]
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: publish-appvault-0-7-2
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 5df10126bb94cb40203743933e1e85e7f9a29979
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5df10126bb94cb40203743933e1e85e7f9a29979
+      - name: Validate the existing build and recover its packages
+        run: |
+          gh api repos/$GITHUB_REPOSITORY/actions/runs/44463601725/jobs > build-jobs.json
+          python3 - <<'PY'
+          import json
+          steps = {s['name']: s['conclusion'] for job in json.load(open('build-jobs.json'))['jobs'] for s in job['steps']}
+          for name in ('Block packaging on installed-version contract failures',
+                       'Test stock helper preparation and integrity', 'Build device app',
+                       'Package privileged rootless jailbreak app', 'Run actions/upload-artifact@v4'):
+              assert steps.get(name) == 'success', (name, steps.get(name))
+          PY
+          gh api repos/$GITHUB_REPOSITORY/actions/artifacts/14501151866/zip > test-packages.zip
+          sha256sum -c <<'EOF'
+          8798ce47062369c19f273bff74d6c887039bb7ffeccd001e19a2059dd4c8c2dc  test-packages.zip
+          EOF
+          unzip -q test-packages.zip AppVault-0.7.2-25.ipa AppVault-0.7.2-25-rootless.deb
+          test "$(dpkg-deb -f AppVault-0.7.2-25-rootless.deb Package)" = com.soum91.appvault
+          test "$(dpkg-deb -f AppVault-0.7.2-25-rootless.deb Version)" = 0.7.2
+          dpkg-deb -x AppVault-0.7.2-25-rootless.deb deb-check
+          python3 - <<'PY'
+          import plistlib, zipfile
+          with zipfile.ZipFile('AppVault-0.7.2-25.ipa') as ipa:
+              assert ipa.testzip() is None
+              app = plistlib.loads(ipa.read('Payload/AppVault.app/Info.plist'))
+          with open('deb-check/var/jb/Applications/AppVault.app/Info.plist', 'rb') as file:
+              rootless = plistlib.load(file)
+          for info in (app, rootless):
+              assert (info['CFBundleIdentifier'], info['CFBundleShortVersionString'], info['CFBundleVersion']) == ('com.soum91.appvault', '0.7.2', '25')
+          PY
+      - name: Publish the authorized prerelease
+        run: |
+          cat >> RELEASE_NOTES.md <<'EOF'
+
+          ## Known limitation
+
+          Rootless App Store download authorization stalls when native WebAssembly is unavailable. The authorization test did not finish within nine minutes. The IPA and rootless DEB are offered as a prerelease for the Files import and other fixes. Physical-device decryption has not been verified. [Authorization test](https://github.com/soum91/AppVault/actions/runs/44456268105)
+
+          ## Build evidence
+
+          The source version check, helper fixtures, iOS compile, and IPA/DEB packaging passed. These are the unchanged packages from [build 25](https://github.com/soum91/AppVault/actions/runs/44463601725). [Changes since v0.7.1](https://github.com/soum91/AppVault/compare/v0.7.1...5df10126bb94cb40203743933e1e85e7f9a29979)
+          EOF
+          if ! gh release view v0.7.2 >/dev/null 2>&1; then
+            gh release create v0.7.2 AppVault-0.7.2-25.ipa AppVault-0.7.2-25-rootless.deb \
+              --target "$SOURCE_SHA" --title "AppVault 0.7.2 (25) - Files import fix" --prerelease --notes-file RELEASE_NOTES.md
+          fi
+      - name: Refresh FlareStore source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,base64,subprocess,os
+          from datetime import datetime,timezone
+          repo=os.environ['GITHUB_REPOSITORY']
+          latest=json.loads(subprocess.check_output(['gh','api','repos/'+repo+'/contents/repo.json']))
+          data=json.loads(base64.b64decode(latest['content']))
+          app=next(a for a in data['apps'] if a.get('bundleIdentifier')=='com.soum91.appvault')
+          description='Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified. App Store download authorization may stall on rootless installations without native WebAssembly.'
+          url='https://github.com/'+repo+'/releases/download/v0.7.2/AppVault-0.7.2-25.ipa'
+          date=datetime.now(timezone.utc).strftime('%Y-%m-%d')
+          app['subtitle']='IPA downloads and stock decryption helpers'
+          app.update(version='0.7.2',versionDate=date,downloadURL=url,size=os.path.getsize('AppVault-0.7.2-25.ipa'),localizedDescription=description)
+          app['versions']=[{'version':'0.7.2','buildVersion':'25','date':date,'downloadURL':url,'size':app['size'],'minOSVersion':'16.0','localizedDescription':description}]
+          data['description']=description
+          payload={'message':'Update FlareStore source for native AppVault 0.7.2 [skip ci]','sha':latest['sha'],'content':base64.b64encode((json.dumps(data,indent=2)+'\n').encode()).decode()}
+          open('feed-request.json','w').write(json.dumps(payload))
+          subprocess.check_call(['gh','api','--method','PUT','repos/'+repo+'/contents/repo.json','--input','feed-request.json'])
+          PY
