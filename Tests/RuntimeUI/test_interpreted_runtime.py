@@ -8,10 +8,12 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
 
 worker = Path(sys.argv[1]).resolve()
 assets = Path(sys.argv[2]).resolve()
 served = set()
+TIMEOUT_SECONDS = 540
 
 
 class Resources(BaseHTTPRequestHandler):
@@ -45,7 +47,15 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
             [worker, base, assets],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
         ) as process:
-            killer = threading.Timer(540, process.kill)
+            timed_out = threading.Event()
+            last_checkpoint = None
+            started = time.monotonic()
+
+            def timeout():
+                timed_out.set()
+                process.kill()
+
+            killer = threading.Timer(TIMEOUT_SECONDS, timeout)
             killer.start()
             try:
                 for line in process.stdout:
@@ -72,7 +82,9 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
                         process.stdin.write(json.dumps(request) + "\n")
                         process.stdin.flush()
                     elif message["type"] == "stage":
-                        print(f"Interpreter download authorization checkpoint {message['index']}", flush=True)
+                        last_checkpoint = message["index"]
+                        elapsed = time.monotonic() - started
+                        print(f"Interpreter download authorization checkpoint {last_checkpoint} at {elapsed:.1f}s", flush=True)
                     elif message["type"] == "result":
                         assert message["ok"], message
                         assert json.loads(message["value"]) == {"provisioned": False, "signerReady": True, "authorization": True}
@@ -80,7 +92,13 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
                         print("PASS: both pinned WASM modules initialized, and synthetic download authorization generated under the Swift interpreter bridge")
                         break
                 else:
-                    raise RuntimeError("Signer exited before producing its result")
+                    if timed_out.is_set():
+                        raise RuntimeError(
+                            f"Interpreted download authorization timed out after {TIMEOUT_SECONDS}s "
+                            f"(last checkpoint: {last_checkpoint}). Test packages are available as artifacts. "
+                            "Publishing remains blocked."
+                        )
+                    raise RuntimeError(f"Signer exited with status {process.wait()} before producing its result")
             finally:
                 killer.cancel()
                 if process.poll() is None:

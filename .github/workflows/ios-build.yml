@@ -68,19 +68,6 @@ jobs:
           (cd helper-template && zip -qry ../Generated/DecryptHelper.zip Payload)
       - name: Build device app
         run: xcodebuild -project AppVault.xcodeproj -scheme AppVault -sdk iphoneos -configuration Release -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-      - name: Run the rootless signer with native WebAssembly disabled
-        env:
-          APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
-        run: |
-          mkdir -p build/host-wasm3
-          for source in AppVault/Wasm3/*.c; do
-            xcrun clang -O2 -std=gnu11 -c "$source" -o "build/host-wasm3/$(basename "$source" .c).o"
-          done
-          xcrun swiftc -O -swift-version 5 -D APPVAULT_INTERPRETER_TEST \
-            SignerHelper/main.swift SignerHelper/Support.swift \
-            AppVault/Attestation/InProcessSAPRuntime.swift AppVault/Attestation/Wasm3Polyfill.swift \
-            -import-objc-header AppVault/Wasm3/AVWasm3Bridge.h build/host-wasm3/*.o -o build/test-signer
-          python3 Tests/RuntimeUI/test_interpreted_runtime.py build/test-signer "$APPVAULT_RUNTIME"
       - name: Package IPA with entitlement template
         run: |
           mkdir -p Payload
@@ -125,10 +112,24 @@ jobs:
           dpkg-deb --info AppVault-0.7.2-25-rootless.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: AppVault-0.7.2-ipa
+          name: AppVault-0.7.2-build-25-test-packages
           path: |
             AppVault-0.7.2-25.ipa
             AppVault-0.7.2-25-rootless.deb
+      # Keep test packages accessible even when the authorization check blocks release.
+      - name: Run the rootless signer with native WebAssembly disabled
+        env:
+          APPVAULT_RUNTIME: /tmp/appvault-runtime-source/iPadn-iOS/vendor/SAPRuntime/files
+        run: |
+          mkdir -p build/host-wasm3
+          for source in AppVault/Wasm3/*.c; do
+            xcrun clang -O2 -std=gnu11 -c "$source" -o "build/host-wasm3/$(basename "$source" .c).o"
+          done
+          xcrun swiftc -O -swift-version 5 -D APPVAULT_INTERPRETER_TEST \
+            SignerHelper/main.swift SignerHelper/Support.swift \
+            AppVault/Attestation/InProcessSAPRuntime.swift AppVault/Attestation/Wasm3Polyfill.swift \
+            -import-objc-header AppVault/Wasm3/AVWasm3Bridge.h build/host-wasm3/*.o -o build/test-signer
+          python3 Tests/RuntimeUI/test_interpreted_runtime.py build/test-signer "$APPVAULT_RUNTIME"
       - name: Publish experimental native client
         env:
           GH_TOKEN: ${{ github.token }}
