@@ -129,7 +129,7 @@ final class LocalSAPSigner: NSObject, ObservableObject {
             await loadSapSigner();
             reportStage(2);
             return await sapGenerateKBSync(guid, dsid);
-            """, arguments: ["guid": guid, "dsid": dsid], reuseRuntime: useCache)
+            """, arguments: ["guid": guid, "dsid": dsid], timeoutSeconds: VaultStorage.isRootless ? 600 : 180, reuseRuntime: useCache)
         if useCache, revision == cacheRevision { kbCache[key] = result }
         return result
     }
@@ -346,7 +346,7 @@ final class LocalSAPSigner: NSObject, ObservableObject {
                 stage = AppText.text("复用本机验证组件")
             }
             try checkActive(id)
-            armTimeout(id: id, seconds: timeoutSeconds, message: AppText.text("验证已超过 3 分钟，已停止本次操作。请保持应用在前台后重试。"))
+            armTimeout(id: id, seconds: timeoutSeconds, message: "Local signer exceeded \(timeoutSeconds) seconds. Keep AppVault in the foreground and try again.")
             progress("Signing Apple authentication request")
             recordStage("javascript-starting")
             var values = arguments
@@ -410,7 +410,7 @@ final class LocalSAPSigner: NSObject, ObservableObject {
             recordStage("jsc-runtime-ready")
         }
         try checkActive(id)
-        armTimeout(id: id, seconds: timeoutSeconds, message: AppText.text("验证已超过 3 分钟，已停止本次操作。请保持应用在前台后重试。"))
+        armTimeout(id: id, seconds: timeoutSeconds, message: "Local signer exceeded \(timeoutSeconds) seconds. Keep AppVault in the foreground and try again.")
         progress("Signing Apple authentication request")
         recordStage("javascript-starting")
         var values: [String: String] = [:]

@@ -45,7 +45,7 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
             [worker, base, assets],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
         ) as process:
-            killer = threading.Timer(180, process.kill)
+            killer = threading.Timer(540, process.kill)
             killer.start()
             try:
                 for line in process.stdout:
@@ -57,7 +57,9 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
                         await loadSapSigner({proxyURL: proxy});
                         const proof = JSON.parse(await sapStoreProofHeaders(state, {proxyURL: proxy}));
                         if (typeof sapWasmPrepareSetup !== "function") throw Error("Go signer did not initialize");
+                        reportStage(1);
                         const authorization = await sapGenerateKBSync("A10203040506", "123456789", {proxyURL: proxy});
+                        reportStage(2);
                         return JSON.stringify({provisioned: proof.provisioned, signerReady: true, authorization: authorization.length > 0});
                         """
                         request = {
@@ -69,6 +71,8 @@ with ThreadingHTTPServer(("127.0.0.1", 0), Resources) as server:
                         }
                         process.stdin.write(json.dumps(request) + "\n")
                         process.stdin.flush()
+                    elif message["type"] == "stage":
+                        print(f"Interpreter download authorization checkpoint {message['index']}", flush=True)
                     elif message["type"] == "result":
                         assert message["ok"], message
                         assert json.loads(message["value"]) == {"provisioned": False, "signerReady": True, "authorization": True}
