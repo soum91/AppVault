@@ -80,7 +80,12 @@ struct StockPreparationView: View {
         .sheet(isPresented: $importing) {
             IPADocumentPicker { url in
                 importing = false
-                if let url { service.prepare(url, fromFiles: true) }
+                guard let url else { return }
+                guard ["ipa", "zip"].contains(url.pathExtension.lowercased()) else {
+                    service.error = "Choose an IPA or ZIP archive."
+                    return
+                }
+                service.prepare(url, fromFiles: true)
             }
         }
         .alert("Helper Preparation", isPresented: Binding(get: { service.error != nil }, set: { if !$0 { service.error = nil } })) { Button("OK") { service.error = nil } } message: { Text(service.error ?? "") }
@@ -88,15 +93,14 @@ struct StockPreparationView: View {
 }
 
 
-// Ask Files for an imported copy. The helper builder only reads its own
-// local snapshot and never reopens a document-provider URL.
+// Open the provider URL in place. IPAFileSnapshot coordinates the local copy.
 private struct IPADocumentPicker: UIViewControllerRepresentable {
     let completed: (URL?) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [UTType(filenameExtension: "ipa") ?? .zip, .zip],
-            asCopy: true
+            forOpeningContentTypes: [.data],
+            asCopy: false
         )
         picker.delegate = context.coordinator
         return picker
