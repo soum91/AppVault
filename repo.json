@@ -2,7 +2,7 @@
   "name": "AppVault",
   "identifier": "com.soum91.appvault.source",
   "subtitle": "AppVault and official IPA download tools",
-  "description": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.",
+  "description": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified. App Store download authorization may stall on rootless installations without native WebAssembly.",
   "website": "https://github.com/soum91/AppVault",
   "tintColor": "#4F46E5",
   "apps": [
@@ -11,24 +11,24 @@
       "bundleIdentifier": "com.soum91.appvault",
       "developerName": "soum91",
       "subtitle": "IPA downloads and stock decryption helpers",
-      "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified.",
+      "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified. App Store download authorization may stall on rootless installations without native WebAssembly.",
       "tintColor": "#4F46E5",
       "category": "utilities",
       "versions": [
         {
-          "version": "0.7.1",
-          "buildVersion": "24",
-          "date": "2026-11-18",
-          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.7.1/AppVault-0.7.1-24.ipa",
-          "size": 1030728,
+          "version": "0.7.2",
+          "buildVersion": "25",
+          "date": "2026-11-19",
+          "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.7.2/AppVault-0.7.2-25.ipa",
+          "size": 1045126,
           "minOSVersion": "16.0",
-          "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified."
+          "localizedDescription": "Prepare a per-app stock iOS decryption helper from a licensed IPA, sign/install it with payload-preserving EmberSign, then export from the helper. Requires the owning Apple Account and Developer Mode. Includes separate rootless installed-app export. Real-device helper signing/decryption remains unverified. App Store download authorization may stall on rootless installations without native WebAssembly."
         }
       ],
-      "version": "0.7.1",
-      "versionDate": "2026-11-18",
-      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.7.1/AppVault-0.7.1-24.ipa",
-      "size": 1030728,
+      "version": "0.7.2",
+      "versionDate": "2026-11-19",
+      "downloadURL": "https://github.com/soum91/AppVault/releases/download/v0.7.2/AppVault-0.7.2-25.ipa",
+      "size": 1045126,
       "iconURL": "https://raw.githubusercontent.com/soum91/AppVault/main/AppVault/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
     },
     {
